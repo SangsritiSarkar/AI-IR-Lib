@@ -102,10 +102,10 @@ def export_results_to_excel(
     ws_summary.row_dimensions[5].height = 24
 
     # Column headers
-    col_headers = ["#", "Framework", "Topic", "Sub Topic",
-                   "Section Number", "Requirements", "Theme", "Relevance"]
-    col_widths   = [4,   18,           20,       25,
-                    16,               55,              30,     11]
+    col_headers = ["#", "Main Theme", "Sub Theme", "Granular Theme",
+                   "Section ID", "Requirements", "Framework", "Score"]
+    col_widths   = [4,   22,           25,           25,
+                    14,               55,              18,         8]
 
     for col_i, (hdr, width) in enumerate(zip(col_headers, col_widths), start=1):
         _header_cell(ws_summary, 6, col_i, hdr, bg=NAVY_HEADER, font_size=9)
@@ -116,18 +116,15 @@ def export_results_to_excel(
     # Data rows
     for row_i, r in enumerate(results, start=7):
         alt_bg = LIGHT_GRAY if (row_i % 2 == 0) else WHITE
-        _data_cell(ws_summary, row_i, 1, r.get("rank", row_i - 6),
-                   bg=alt_bg, align="center")
-        _data_cell(ws_summary, row_i, 2, r.get("framework", ""), bg=alt_bg)
-        _data_cell(ws_summary, row_i, 3, r.get("topic", ""), bg=alt_bg)
-        _data_cell(ws_summary, row_i, 4, r.get("sub_topic", ""), bg=alt_bg)
-        _data_cell(ws_summary, row_i, 5, r.get("section_number", ""),
-                   bg=alt_bg, align="center")
-        _data_cell(ws_summary, row_i, 6, r.get("requirements", ""), bg=alt_bg)
-        _data_cell(ws_summary, row_i, 7, r.get("theme", ""), bg=alt_bg)
+        _data_cell(ws_summary, row_i, 1, r.get("rank", row_i - 6),     bg=alt_bg, align="center")
+        _data_cell(ws_summary, row_i, 2, r.get("main_theme", ""),       bg=alt_bg, bold=True)
+        _data_cell(ws_summary, row_i, 3, r.get("sub_theme", ""),        bg=alt_bg)
+        _data_cell(ws_summary, row_i, 4, r.get("granular_theme", ""),   bg=alt_bg)
+        _data_cell(ws_summary, row_i, 5, r.get("section_number", ""),   bg=alt_bg, align="center")
+        _data_cell(ws_summary, row_i, 6, r.get("requirements", ""),     bg=alt_bg)
+        _data_cell(ws_summary, row_i, 7, r.get("framework", ""),        bg=alt_bg)
         score = r.get("relevance_score", "")
-        score_cell = _data_cell(ws_summary, row_i, 8, score,
-                                 bg=alt_bg, align="center", bold=True)
+        score_cell = _data_cell(ws_summary, row_i, 8, score,            bg=alt_bg, align="center", bold=True)
         # Color-code relevance score
         if isinstance(score, int):
             if score >= 8:
@@ -172,10 +169,10 @@ def export_results_to_excel(
         ws["A2"].alignment = Alignment(horizontal="left", indent=1)
         ws.row_dimensions[2].height = 16
 
-        headers = ["#", "Topic", "Sub Topic", "Section Number",
-                   "Requirements", "Theme", "Relevance"]
-        widths   = [4,   22,       26,           18,
-                    58,            32,      11]
+        headers = ["#", "Main Theme", "Sub Theme", "Granular Theme",
+                   "Section ID", "Requirements", "Score"]
+        widths   = [4,   22,           25,           25,
+                    14,               55,            8]
 
         for col_i, (hdr, width) in enumerate(zip(headers, widths), start=1):
             _header_cell(ws, 3, col_i, hdr, bg=PURPLE_HEADER, font_size=9)
@@ -184,15 +181,13 @@ def export_results_to_excel(
 
         for row_i, r in enumerate(fw_results, start=4):
             alt_bg = LIGHT_GRAY if (row_i % 2 == 0) else WHITE
-            _data_cell(ws, row_i, 1, r.get("rank", ""), bg=alt_bg, align="center")
-            _data_cell(ws, row_i, 2, r.get("topic", ""), bg=alt_bg)
-            _data_cell(ws, row_i, 3, r.get("sub_topic", ""), bg=alt_bg)
-            _data_cell(ws, row_i, 4, r.get("section_number", ""),
-                       bg=alt_bg, align="center")
-            _data_cell(ws, row_i, 5, r.get("requirements", ""), bg=alt_bg)
-            _data_cell(ws, row_i, 6, r.get("theme", ""), bg=alt_bg)
-            _data_cell(ws, row_i, 7, r.get("relevance_score", ""),
-                       bg=alt_bg, align="center", bold=True)
+            _data_cell(ws, row_i, 1, r.get("rank", ""),            bg=alt_bg, align="center")
+            _data_cell(ws, row_i, 2, r.get("main_theme", ""),      bg=alt_bg, bold=True)
+            _data_cell(ws, row_i, 3, r.get("sub_theme", ""),       bg=alt_bg)
+            _data_cell(ws, row_i, 4, r.get("granular_theme", ""),  bg=alt_bg)
+            _data_cell(ws, row_i, 5, r.get("section_number", ""),  bg=alt_bg, align="center")
+            _data_cell(ws, row_i, 6, r.get("requirements", ""),    bg=alt_bg)
+            _data_cell(ws, row_i, 7, r.get("relevance_score", ""), bg=alt_bg, align="center", bold=True)
 
             for col_j in range(1, 8):
                 ws.cell(row=row_i, column=col_j).border = _thin_border()
@@ -211,36 +206,36 @@ def export_results_to_excel(
     ws_themes["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws_themes.row_dimensions[1].height = 28
 
-    theme_headers = ["Theme", "Framework", "Count", "Top Section Numbers", "Sample Requirement"]
-    theme_widths  = [35,       20,           8,        30,                    55]
+    theme_headers = ["Main Theme", "Sub Theme", "Granular Theme", "Framework", "Count", "Sample Requirement"]
+    theme_widths  = [28,           28,           28,               18,          8,        55]
     for col_i, (hdr, width) in enumerate(zip(theme_headers, theme_widths), start=1):
         _header_cell(ws_themes, 2, col_i, hdr, bg=NAVY_HEADER, font_size=9)
         ws_themes.column_dimensions[get_column_letter(col_i)].width = width
     ws_themes.row_dimensions[2].height = 20
 
-    # Group results by theme
+    # Group results by granular theme
     from collections import defaultdict
     theme_groups: dict[str, list] = defaultdict(list)
     for r in results:
-        theme_groups[r.get("theme", "Unknown")].append(r)
+        key = r.get("granular_theme", "") or r.get("theme", "Unknown")
+        theme_groups[key].append(r)
 
-    for row_i, (theme, t_results) in enumerate(
+    for row_i, (theme_key, t_results) in enumerate(
         sorted(theme_groups.items(), key=lambda x: -len(x[1])), start=3
     ):
         alt_bg = LIGHT_GRAY if (row_i % 2 == 0) else WHITE
+        sample = t_results[0] if t_results else {}
         frameworks = ", ".join(sorted(set(r.get("framework", "") for r in t_results)))
-        sections = ", ".join(sorted(set(
-            r.get("section_number", "") for r in t_results if r.get("section_number")
-        ))[:5])
-        sample_req = t_results[0].get("requirements", "")[:200] if t_results else ""
+        sample_req = sample.get("requirements", "")[:200]
 
-        _data_cell(ws_themes, row_i, 1, theme, bg=alt_bg, bold=True)
-        _data_cell(ws_themes, row_i, 2, frameworks, bg=alt_bg)
-        _data_cell(ws_themes, row_i, 3, len(t_results), bg=alt_bg, align="center")
-        _data_cell(ws_themes, row_i, 4, sections, bg=alt_bg)
-        _data_cell(ws_themes, row_i, 5, sample_req, bg=alt_bg)
+        _data_cell(ws_themes, row_i, 1, sample.get("main_theme", ""),    bg=alt_bg, bold=True)
+        _data_cell(ws_themes, row_i, 2, sample.get("sub_theme", ""),     bg=alt_bg)
+        _data_cell(ws_themes, row_i, 3, theme_key,                       bg=alt_bg)
+        _data_cell(ws_themes, row_i, 4, frameworks,                      bg=alt_bg)
+        _data_cell(ws_themes, row_i, 5, len(t_results),                  bg=alt_bg, align="center")
+        _data_cell(ws_themes, row_i, 6, sample_req,                      bg=alt_bg)
 
-        for col_j in range(1, 6):
+        for col_j in range(1, 7):
             ws_themes.cell(row=row_i, column=col_j).border = _thin_border()
         ws_themes.row_dimensions[row_i].height = 20
 

@@ -374,10 +374,7 @@ const styles = `
     letter-spacing: 0.08em;
     padding: 8px 12px;
     text-align: left;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 56px;
-    z-index: 5;
+    border-bottom: 2px solid var(--border2);
     white-space: nowrap;
   }
   .req-table td {
@@ -508,7 +505,37 @@ const styles = `
   .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); font-family: var(--mono); font-size: 11px; }
   .empty-icon { font-size: 36px; margin-bottom: 12px; }
 
-  .section-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+  /* Multi-theme mapping pills */
+  .theme-mapping-cell { display: flex; flex-direction: column; gap: 6px; }
+  .theme-mapping-entry {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 4px;
+    padding: 6px 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .theme-mapping-entry:hover { border-color: var(--border2); border-left-color: var(--green); }
+  .tme-label {
+    font-family: var(--mono);
+    font-size: 8px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .tme-label-sep { color: var(--border2); }
+  .tme-granular { font-family: var(--mono); font-size: 10px; color: var(--green); line-height: 1.4; font-weight: 700; }
+  .tme-sub { font-family: var(--mono); font-size: 9px; color: var(--cyan2); }
+  .tme-main { font-family: var(--mono); font-size: 9px; color: var(--purple); }
+  .tme-footer { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+  .tme-idx { font-family: var(--mono); font-size: 8px; color: var(--text3); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1px 6px; }
+  .no-mappings { font-family: var(--mono); font-size: 10px; color: var(--text3); font-style: italic; }
   .section-divider::before, .section-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
   .section-divider span { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; white-space: nowrap; }
 
@@ -660,50 +687,292 @@ If no requirements exist in this text, return: []`,
   return { reqs: parsed, rawResponse: raw, parseError: null };
 }
 
-// ─── Step 2: Map requirements to themes (batched) ────────────────────────────
+// ─── FIX 5: Theme name normaliser — strips numeric prefixes ──────────────────
+// Converts "9.1.1. IT Governance Framework" → "IT Governance Framework"
+// Applied to every granular theme name coming out of the AI, ensuring all
+// comparisons, grouping and display use clean plain names.
+function normaliseThemeName(name) {
+  if (!name) return "";
+  return String(name).replace(/^\d+(\.\d+)*\.\s*/, "").trim();
+}
+
+// ─── FIX 4: Theme descriptions for rarely-produced themes ────────────────────
+// These descriptions are injected into the mapping prompt so the model can
+// recognise when a requirement maps to a theme it would otherwise overlook.
+const THEME_DESCRIPTIONS = {
+  "IT Compliance Management Framework": "Overarching framework governing compliance obligations, policies, and processes for managing regulatory requirements",
+  "IT Compliance Reporting": "Reporting on regulatory or compliance status, findings, and obligations to stakeholders or regulators",
+  "IT Compliance Assessment": "Formal assessment or audit activities to evaluate compliance with regulatory or policy requirements",
+  "IT Regulatory Change Management": "Process for tracking, assessing, and responding to changes in laws, regulations, and standards",
+  "IT Strategy": "Strategic planning and long-term direction for IT and cybersecurity aligned to business objectives",
+  "Information Security Management System (ISMS)": "The overarching ISMS framework (e.g. ISO 27001) governing information security policies, controls, and continual improvement",
+  "Employee Roles & Responsibilities": "Defining, communicating, and enforcing security-related roles, duties, and accountabilities within the workforce",
+  "Management Reporting": "Internal reporting to senior management on security posture, risk status, incidents, and metrics",
+  "Network Architecture Diagram": "Documentation and maintenance of network topology, data flows, and authorised communication paths",
+  "Service Catalog Management": "Inventory and lifecycle management of services the organisation provides to or receives from others",
+  "Incident Management": "Organisation-level governance, policy, and oversight for cybersecurity incident management",
+  "Cybersecurity Incident Response Plans": "Specific documented plans, playbooks, and procedures for responding to cybersecurity incidents",
+  "Password Management": "Controls governing creation, storage, rotation, and enforcement of passwords and passphrases",
+  "Access Control System": "Technical and procedural controls enforcing who can access systems, applications, and data",
+  "Dual Access": "Controls requiring two separate parties or credentials to complete a sensitive action (dual control / dual authorisation)",
+  "External Digital Identity": "Management of digital identities for external users, partners, or customers accessing organisational systems",
+  "Generic IDs Management": "Governance of shared, generic, or non-personal accounts (e.g. admin, service, system accounts)",
+  "Non-Conformity and Findings Management": "Process for recording, tracking, and resolving non-conformities, audit findings, and exceptions",
+  "IT Third Party Recourse": "Contractual and procedural mechanisms for seeking redress or remediation from third-party suppliers",
+  "IT Third Party Service Monitoring": "Ongoing monitoring of third-party service performance, security posture, and compliance",
+  "Service Level Monitoring": "Tracking and reporting on SLA adherence, service performance metrics, and breach management",
+  "Third party Concentration Risk": "Assessment and management of risk arising from over-reliance on a single supplier or class of suppliers",
+  "Escrows for Third Party Source Codes": "Contractual arrangements ensuring source code or software assets are held in escrow for continuity",
+  "IT Contract Renewals and Termination": "Governance of contract renewal decisions, termination clauses, and exit obligations",
+  "Asset Disposition": "Secure disposal and sanitisation of assets at end-of-life to prevent data leakage",
+  "Asset Maintenance": "Scheduled maintenance, patching, and upkeep of hardware and software assets",
+  "Asset Recertification": "Periodic re-validation and recertification of asset inventories and their classifications",
+  "IT Asset Decommissioning": "Formal process for decommissioning and retiring IT assets from service",
+  "Data Discovery": "Identification and cataloguing of data across systems, including sensitive and unstructured data",
+  "Database Inventory": "Maintaining a register of all databases, their owners, data types, and sensitivity levels",
+  "Penetration Testing and Remediation": "Planned penetration tests against systems and the remediation of identified vulnerabilities",
+  "Post-remediation Validation": "Testing to confirm that previously identified vulnerabilities have been fully remediated",
+  "Security Testing for Platforms": "Security testing activities specific to platforms, operating systems, or infrastructure components",
+  "Vulnerability & Pentest Metrics Reporting": "Reporting on vulnerability scan results, penetration test outcomes, and remediation metrics",
+  "Vulnerability and Penetration Testing of Vendor Managed Applications": "Vulnerability and pen-testing of applications or systems managed by third-party vendors",
+  "Zero-day Vulnerability Management": "Processes for identifying, assessing, and responding to zero-day vulnerabilities",
+  "Change Tracking and Communication": "Recording change activities and communicating change status to affected stakeholders",
+  "Testing of Changes": "Testing requirements for verifying changes before deployment, including regression and impact testing",
+  "Disaster Recovery Plan Testing": "Scheduled testing and exercising of disaster recovery plans to validate recovery capabilities",
+  "Background Screening": "Pre-employment and periodic background checks for personnel with access to sensitive systems or data",
+};
+
+// ─── FIX 2 + FIX 1: Build enriched granular theme list with descriptions ─────
+// Combines the taxonomy list with descriptions for rarely-produced themes, and
+// applies strict usage rules for over-used generic themes.
+function buildEnrichedThemeList(themes) {
+  return themes.map(t => {
+    const clean = normaliseThemeName(t);
+    const desc = THEME_DESCRIPTIONS[clean];
+    return desc ? `${clean} — ${desc}` : clean;
+  }).join("\n");
+}
+
+// ─── Step 2: Map requirements to MULTIPLE themes (batched) ───────────────────
+// Each requirement can match several granular themes.
+// Returns array of { idx, mappings: [{granularTheme, subTheme, mainTheme, confidence}] }
 
 async function mapRequirementsToThemes(apiKey, endpoint, apiVersion, requirements, themes, themeTree, frameworkName) {
-  // Build compact hierarchy string for context
+  // FIX 5: normalise theme names in hierarchy context (strip numeric prefixes)
   const hierarchyContext = themeTree.length > 0
-    ? themeTree.slice(0, 30).map(m =>
-        `[MAIN] ${m.main}\n` + m.subs.slice(0, 10).map(s =>
-          `  [SUB] ${s.sub}\n` + s.granular.slice(0, 15).map(g => `    [GRAN] ${g}`).join("\n")
+    ? themeTree.slice(0, 40).map(m =>
+        `[MAIN] ${normaliseThemeName(m.main)}\n` + m.subs.slice(0, 15).map(s =>
+          `  [SUB] ${normaliseThemeName(s.sub)}\n` + s.granular.slice(0, 20).map(g => `    [GRAN] ${normaliseThemeName(g)}`).join("\n")
         ).join("\n")
       ).join("\n")
-    : themes.slice(0, 100).map((t, i) => `${i + 1}. ${t}`).join("\n");
+    : themes.map(t => normaliseThemeName(t)).slice(0, 150).join("\n");
 
-  const granularList = themes.slice(0, 200).map((t, i) => `${i + 1}. ${t}`).join("\n");
+  // FIX 4: enriched list with descriptions for underused themes
+  const enrichedGranularList = buildEnrichedThemeList(themes);
+
+  // FIX 3: Few-shot calibration examples from verified manual ground truth
+  const fewShotExamples = `CALIBRATION EXAMPLES (from verified expert mappings — use as precision reference):
+Req: "The organizational mission is understood and informs cybersecurity risk management"
+→ [IT Governance Framework]
+
+Req: "Risk appetite and risk tolerance statements are established, communicated, and maintained"
+→ [IT Risk Response]
+
+Req: "Cybersecurity risk management activities and outcomes are included in enterprise risk management processes"
+→ [IT Compliance Reporting, IT Risk Reporting, IT Risk Response]
+
+Req: "Lines of communication across the organization are established for cybersecurity risks, including risks from suppliers and other third parties"
+→ [Communication, IT Compliance Reporting, IT Risk Reporting, Management Reporting]
+
+Req: "Roles, responsibilities, and authorities related to cybersecurity risk management are established, communicated, understood, and enforced"
+→ [Employee Roles & Responsibilities]
+
+Req: "Policy for managing cybersecurity risks is reviewed, updated, communicated, and enforced to reflect changes in requirements, threats, technology, and organizational mission"
+→ [IT Compliance Assessment, IT Compliance Management Framework, IT Policies and Standards Management]
+
+Req: "Identities are proofed and bound to credentials based on the context of interactions"
+→ [Access Control System, Dual Access, External Digital Identity, Generic IDs Management, User Access Provisioning]
+
+Req: "Vulnerabilities in assets are identified, validated, and recorded"
+→ [Penetration Testing and Remediation, Post-remediation Validation, Vulnerability & Pentest Metrics Reporting, Vulnerability Prioritization, Vulnerability Scanning and Remediation, Vulnerability and Penetration Testing of Vendor Managed Applications, Zero-day Vulnerability Management]
+
+Req: "Systems, hardware, software, services, and data are managed throughout their life cycles"
+→ [Asset Disposition, Asset End of Life Management, Asset Maintenance, Asset Protection, Asset Recertification, IT Asset Decommissioning, Return of Assets]
+
+Req: "Representations of the organization's authorized network communication and internal and external network links are maintained"
+→ [Network Architecture Diagram]
+
+Req: "Inventories of software, services, and systems managed by the organization are maintained"
+→ [Asset Catalog Management, Data Discovery, Database Inventory, Service Catalog Management]
+
+Req: "Cybersecurity supply chain risk management plans include provisions for activities that occur after the conclusion of a partnership or agreement"
+→ [IT Contract Renewals and Termination, Third Party Offboarding & Exit Strategies]`;
+
+  // FIX 1: Strict usage rules for over-used generic themes
+  const usageRules = `STRICT THEME USAGE RULES — apply rigorously before assigning any theme:
+
+"Communication": ONLY when the requirement is specifically about notification channels, reporting lines, escalation paths, or alert mechanisms. NOT a catch-all for requirements that mention communicating anything.
+
+"IT Governance Framework": ONLY when the requirement is specifically about governance structures, charters, board-level accountability, or governance frameworks. NOT for risk management, strategy, or policy topics.
+
+"Asset Discovery": ONLY for active scanning, discovery, or enumeration processes for identifying assets on a network. NOT for any requirement that simply mentions assets or inventories in another context.
+
+"Continual Process Improvement": ONLY when the requirement explicitly mentions reviews, improvement cycles, lessons learned, or feedback loops. NOT for general operational or management processes.
+
+"Training and Awareness": ONLY when the requirement explicitly mentions training, awareness programmes, education, or staff learning activities. NOT for HR, roles, responsibilities, or cultural topics.
+
+"IT Risk Management Framework": ONLY for the risk management methodology, framework, or governance structure itself. When a requirement mentions specific risk activities, use the specific theme instead:
+  - Risk evaluation → IT Risk Assessment
+  - Risk treatment/response → IT Risk Response
+  - Risk reporting → IT Risk Reporting
+  - Compliance reporting → IT Compliance Reporting
+
+DISAMBIGUATION PAIRS — distinguish carefully:
+- "Incident Management" (org-level governance) vs "Incident Response and Resolution" (IT operational process)
+- "Service Catalog Management" (services inventory) vs "Asset Catalog Management" (hardware/software inventory)
+- "IT Compliance Reporting" (regulatory obligations) vs "IT Risk Reporting" (risk posture) — these frequently BOTH apply to the same requirement
+- "IT Third Party Risk Assessment" (proactive evaluation) vs "IT Third Party Risk Issue Management" (reactive problem handling)
+- "Cybersecurity Incident Response Plans" (specific cyber IR plans) vs "Business Continuity Plan" (broader operational continuity)
+- "Network Architecture Diagram" (topology documentation) vs "Asset Discovery" (active scanning process)`;
+
+  // FIX 3: Reasoning framework instruction
+  const reasoningInstruction = `REASONING PROCESS — for each requirement, systematically check ALL five dimensions:
+1. DOCUMENTATION: What records, registers, inventories, or diagrams must be maintained?
+2. PROCESSES: What operational processes or procedures must be in place?
+3. CONTROLS: What technical or procedural controls are mandated?
+4. REPORTING: What reporting or communication obligations follow (compliance, risk, management)?
+5. THIRD-PARTY: Are there vendor/supplier management implications?
+Map to a theme for EACH dimension that genuinely applies. Complex requirements often span 4–7 themes.`;
 
   const raw = await callAzure(endpoint, apiKey, apiVersion, [
     {
       role: "system",
-      content: `You are a cybersecurity compliance analyst. Map each requirement to the most specific (granular) theme from the hierarchy below.
+      content: `You are a senior cybersecurity compliance analyst specialising in mapping framework requirements to control themes. A single requirement frequently addresses multiple security themes — your job is to identify ALL of them with precision.
 
-Theme hierarchy (3 levels):
+${usageRules}
+
+${reasoningInstruction}
+
+AVAILABLE THEME HIERARCHY (3 levels — Main → Sub → Granular):
 ${hierarchyContext}
 
-Exact granular themes to use:
-${granularList}
+GRANULAR THEMES (mapping targets — use EXACT plain names, no numeric prefixes):
+${enrichedGranularList}
 
-Return ONLY a valid JSON array (no markdown, no explanation).
-Each item must have:
-- "idx": the index number from the input array (0-based)
-- "granularTheme": EXACT text from the granular themes list above
-- "subTheme": the parent sub-theme (Level 2) that contains the granular theme
-- "mainTheme": the top-level main theme (Level 1)
-- "confidence": integer 0-100
+${fewShotExamples}
 
-CRITICAL: granularTheme MUST be copied exactly from the list. Never invent theme names.`,
+OUTPUT FORMAT — return ONLY a valid JSON array (no markdown, no explanation, no preamble):
+Each element represents ONE requirement:
+{
+  "idx": <0-based index from input>,
+  "mappings": [
+    { "granularTheme": "<exact plain name>", "subTheme": "<Level-2 parent>", "mainTheme": "<Level-1 parent>", "confidence": <0-100> },
+    ...
+  ]
+}
+
+CRITICAL OUTPUT RULES:
+- "granularTheme" must be the PLAIN NAME only — no numbers, no prefixes (e.g. "IT Governance Framework" NOT "9.1.1. IT Governance Framework")
+- Include ALL genuinely relevant granular themes per requirement — do not stop at the first match
+- Minimum confidence threshold: 55 — exclude mappings below this
+- If truly no theme fits, use mappings: []`,
     },
     {
       role: "user",
-      content: `Framework: ${frameworkName}\n\nRequirements (0-indexed):\n${JSON.stringify(requirements.map((r, i) => ({ idx: i, requirement: r.requirement, topic: r.topic, subTopic: r.subTopic })), null, 1)}\n\nReturn JSON array only.`,
+      content: `Framework: ${frameworkName}
+
+Requirements to map (0-indexed):
+${JSON.stringify(
+  requirements.map((r, i) => ({ idx: i, requirement: r.requirement, topic: r.topic, subTopic: r.subTopic })),
+  null, 1
+)}
+
+Apply the reasoning process (5 dimensions) for each requirement. Return JSON array only.`,
     },
   ], 4000);
 
   const parsed = robustParseJSON(raw);
   if (!Array.isArray(parsed)) return [];
-  return parsed;
+
+  // FIX 5: Normalise all output theme names (strip any numeric prefixes the model may still include)
+  return parsed.map(item => {
+    // Handle legacy single-theme format
+    if (!item.mappings && item.granularTheme) {
+      return {
+        idx: item.idx ?? 0,
+        mappings: [{
+          granularTheme: normaliseThemeName(item.granularTheme),
+          subTheme: normaliseThemeName(item.subTheme || ""),
+          mainTheme: normaliseThemeName(item.mainTheme || ""),
+          confidence: item.confidence || 75
+        }]
+      };
+    }
+    if (!item.mappings || !Array.isArray(item.mappings)) {
+      return { idx: item.idx ?? 0, mappings: [] };
+    }
+    return {
+      idx: item.idx ?? 0,
+      mappings: item.mappings
+        .filter(m => m && m.granularTheme)
+        .map(m => ({
+          granularTheme: normaliseThemeName(m.granularTheme),
+          subTheme: normaliseThemeName(m.subTheme || ""),
+          mainTheme: normaliseThemeName(m.mainTheme || ""),
+          confidence: m.confidence || 75
+        }))
+    };
+  });
+}
+
+// ─── Step 3: Post-processing validator (FIX 3 — reviewer pass) ───────────────
+// Lightweight second call that reviews the mappings for a single requirement,
+// catches obviously wrong themes and surfaces obvious misses.
+async function validateMappings(apiKey, endpoint, apiVersion, requirement, proposedMappings, themes, frameworkName) {
+  const proposedNames = proposedMappings.map(m => m.granularTheme).join(", ");
+  const cleanThemes = themes.map(t => normaliseThemeName(t)).filter(Boolean);
+
+  const raw = await callAzure(endpoint, apiKey, apiVersion, [
+    {
+      role: "system",
+      content: `You are a senior cybersecurity compliance reviewer. You will review a proposed theme mapping and correct it.
+
+Available granular themes (plain names only):
+${cleanThemes.slice(0, 200).join(", ")}
+
+Your task:
+1. Remove any proposed themes that are clearly incorrect or too generic for this specific requirement
+2. Add any obviously missing themes from the available list that clearly apply
+3. Return the corrected final list
+
+STRICT RULES (same as original mapping):
+- "Communication": only for explicit notification/reporting channels
+- "IT Governance Framework": only for governance structures/accountability
+- "Asset Discovery": only for active asset scanning processes
+- "Continual Process Improvement": only when improvement cycles are explicitly mentioned
+- "Training and Awareness": only when training/education is explicitly mentioned
+- "IT Risk Management Framework": only for the framework methodology itself
+
+Return ONLY a JSON object: { "finalMappings": ["Theme Name 1", "Theme Name 2", ...] }
+Use exact plain theme names. No numeric prefixes. No markdown.`,
+    },
+    {
+      role: "user",
+      content: `Framework: ${frameworkName}
+Requirement: "${requirement}"
+Proposed themes: [${proposedNames}]
+
+Review and return corrected finalMappings JSON only.`,
+    },
+  ], 1000);
+
+  try {
+    const parsed = robustParseJSON(raw);
+    if (parsed && Array.isArray(parsed.finalMappings)) {
+      return parsed.finalMappings.map(t => normaliseThemeName(t)).filter(Boolean);
+    }
+  } catch {}
+  return null; // null = keep original if validator fails
 }
 
 // ─── Script loader ────────────────────────────────────────────────────────────
@@ -821,14 +1090,17 @@ function ConfPill({ conf }) {
   return <span className={`conf-pill ${cls}`}>{c}%</span>;
 }
 
-function FrameworkTableBlock({ framework, rows, show }) {
+function FrameworkTableBlock({ framework, rows }) {
   const [open, setOpen] = useState(true);
-  if (!show) return null;
+  const totalMappings = rows.reduce((sum, r) => sum + (r.themeMappings?.length || 0), 0);
   return (
     <div className="framework-block">
       <div className="framework-header" onClick={() => setOpen(o => !o)}>
         <span className="framework-name">{framework}</span>
         <span className="framework-badge">{rows.length} requirements</span>
+        <span className="framework-badge" style={{ color: "var(--green)", borderColor: "rgba(0,255,136,0.2)", background: "rgba(0,255,136,0.05)" }}>
+          {totalMappings} theme mappings
+        </span>
         <span className={`chevron ${open ? "open" : ""}`}>▼</span>
       </div>
       {open && (
@@ -836,29 +1108,55 @@ function FrameworkTableBlock({ framework, rows, show }) {
           <table className="req-table">
             <thead>
               <tr>
-                <th style={{ width: 90 }}>Section ID</th>
-                <th style={{ width: 130 }}>Topic</th>
-                <th style={{ width: 130 }}>Sub-Topic</th>
-                <th>Requirement</th>
-                <th style={{ width: 180 }}>Granular Theme</th>
-                <th style={{ width: 160 }}>Sub Theme</th>
-                <th style={{ width: 160 }}>Main Theme</th>
-                <th style={{ width: 60 }}>Conf.</th>
+                <th style={{ width: 80 }}>Section ID</th>
+                <th style={{ width: 120 }}>Topic</th>
+                <th style={{ width: 120 }}>Sub-Topic</th>
+                <th style={{ minWidth: 260 }}>Requirement</th>
+                <th style={{ minWidth: 340 }}>Theme Mappings (Granular → Sub → Main)</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, idx) => (
-                <tr key={idx}>
-                  <td><span className="cell-id">{row.sectionId || "—"}</span></td>
-                  <td><span className="cell-mono">{row.topic || "—"}</span></td>
-                  <td><span className="cell-mono" style={{ color: "var(--text3)" }}>{row.subTopic || "—"}</span></td>
-                  <td><span className="cell-req">{row.requirement}</span></td>
-                  <td><span className="cell-granular">{row.granularTheme || "—"}</span></td>
-                  <td><span className="cell-sub">{row.subTheme || "—"}</span></td>
-                  <td><span className="cell-main">{row.mainTheme || "—"}</span></td>
-                  <td><ConfPill conf={row.confidence} /></td>
-                </tr>
-              ))}
+              {rows.map((row, idx) => {
+                const mappings = row.themeMappings || [];
+                return (
+                  <tr key={idx}>
+                    <td><span className="cell-id">{row.sectionId || "—"}</span></td>
+                    <td><span className="cell-mono">{row.topic || "—"}</span></td>
+                    <td><span className="cell-mono" style={{ color: "var(--text3)" }}>{row.subTopic || "—"}</span></td>
+                    <td><span className="cell-req">{row.requirement}</span></td>
+                    <td>
+                      {mappings.length === 0 ? (
+                        <span className="no-mappings">No theme matched</span>
+                      ) : (
+                        <div className="theme-mapping-cell">
+                          {mappings.map((tm, ti) => {
+                            const conf = tm.confidence || 0;
+                            const confCls = conf >= 80 ? "conf-high" : conf >= 60 ? "conf-mid" : "conf-low";
+                            return (
+                              <div key={ti} className="theme-mapping-entry">
+                                <div className="tme-label">
+                                  <span style={{ color: "var(--green)" }}>Granular</span>
+                                  <span className="tme-label-sep">→</span>
+                                  <span style={{ color: "var(--cyan2)" }}>Sub</span>
+                                  <span className="tme-label-sep">→</span>
+                                  <span style={{ color: "var(--purple)" }}>Main</span>
+                                </div>
+                                <span className="tme-granular">{tm.granularTheme || "—"}</span>
+                                <span className="tme-sub">↳ {tm.subTheme || "—"}</span>
+                                <span className="tme-main">↳ {tm.mainTheme || "—"}</span>
+                                <div className="tme-footer">
+                                  <span className="tme-idx">#{ti + 1}</span>
+                                  <span className={`conf-pill ${confCls}`}>{conf}%</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1161,23 +1459,79 @@ export default function App() {
         addLog(`  Total extracted: ${allReqs.length} requirements`, allReqs.length > 0 ? "success" : "warn");
         if (allReqs.length === 0) { addLog(`  Skipping theme mapping — no requirements found.`, "warn"); continue; }
 
-        // Map to themes in batches of 20
-        const BATCH = 20;
+        // Map to themes in batches of 10 (smaller = better focus per call with enriched prompt)
+        const BATCH = 10;
         const batches = Math.ceil(allReqs.length / BATCH);
         const mappedData = [];
 
         for (let bi = 0; bi < batches; bi++) {
           const batch = allReqs.slice(bi * BATCH, (bi + 1) * BATCH);
-          const pct = Math.round(((fi + 0.65 + (bi + 1) / batches * 0.35) / totalFiles) * 100);
+          const pct = Math.round(((fi + 0.55 + (bi + 1) / batches * 0.30) / totalFiles) * 100);
           setProgress(pct);
           setProgressLabel(`[${frameworkName}] Mapping themes — batch ${bi + 1}/${batches}`);
           addLog(`  Mapping batch ${bi + 1}/${batches} (${batch.length} reqs)...`);
 
           try {
             const mappedBatch = await mapRequirementsToThemes(apiKey, azureEndpoint, apiVersion, batch, themes, themeTree, frameworkName);
-            addLog(`    ✓ Mapped ${mappedBatch.length} requirements`, mappedBatch.length > 0 ? "success" : "warn");
+            const totalMappings = mappedBatch.reduce((sum, m) => sum + (m.mappings?.length || 0), 0);
+            addLog(`    ✓ ${mappedBatch.length} reqs → ${totalMappings} theme mappings`, mappedBatch.length > 0 ? "success" : "warn");
 
-            // Merge extraction data with mapping data
+            // ── Validator pass: review each requirement's mappings ────────────
+            // Runs a lightweight second AI call per requirement to catch false
+            // positives and obvious missed themes.
+            for (let mi = 0; mi < mappedBatch.length; mi++) {
+              const m = mappedBatch[mi];
+              const originalIdx = m.idx ?? 0;
+              const original = batch[originalIdx] || batch[0];
+              if (!original || !Array.isArray(m.mappings) || m.mappings.length === 0) continue;
+
+              const validatorPct = Math.round(((fi + 0.55 + (bi + 1) / batches * 0.30 + (mi + 1) / mappedBatch.length * 0.05) / totalFiles) * 100);
+              setProgress(Math.min(validatorPct, 99));
+              setProgressLabel(`[${frameworkName}] Validating — batch ${bi + 1}, req ${mi + 1}/${mappedBatch.length}`);
+
+              try {
+                const validatedNames = await validateMappings(
+                  apiKey, azureEndpoint, apiVersion,
+                  original.requirement,
+                  m.mappings,
+                  themes,
+                  frameworkName
+                );
+
+                if (validatedNames && validatedNames.length > 0) {
+                  // Rebuild mappings: keep original confidence for retained themes,
+                  // assign 75 for newly added ones, look up sub/main from themeTree
+                  const existingByName = Object.fromEntries(
+                    m.mappings.map(x => [x.granularTheme.toLowerCase(), x])
+                  );
+                  m.mappings = validatedNames.map(name => {
+                    const existing = existingByName[name.toLowerCase()];
+                    if (existing) return existing;
+                    // New theme added by validator — look up hierarchy
+                    let subTheme = "", mainTheme = "";
+                    for (const mn of themeTree) {
+                      for (const sn of mn.subs || []) {
+                        for (const gn of sn.granular || []) {
+                          if (normaliseThemeName(gn).toLowerCase() === name.toLowerCase()) {
+                            subTheme = normaliseThemeName(sn.sub);
+                            mainTheme = normaliseThemeName(mn.main);
+                          }
+                        }
+                      }
+                    }
+                    return { granularTheme: name, subTheme, mainTheme, confidence: 75 };
+                  });
+                  const delta = validatedNames.length - (Object.keys(existingByName).length);
+                  if (delta !== 0) addLog(`      Validator adjusted req ${originalIdx}: ${delta > 0 ? "+" : ""}${delta} themes`, "info");
+                }
+              } catch (ve) {
+                addLog(`      Validator skipped req ${originalIdx}: ${ve.message}`, "info");
+              }
+
+              await new Promise(r => setTimeout(r, 400));
+            }
+
+            // Store each requirement with its validated theme mappings
             mappedBatch.forEach(m => {
               const originalIdx = m.idx ?? 0;
               const original = batch[originalIdx] || batch[0];
@@ -1188,10 +1542,9 @@ export default function App() {
                   topic: original.topic || "",
                   subTopic: original.subTopic || "",
                   requirement: original.requirement || "",
-                  granularTheme: m.granularTheme || "",
-                  subTheme: m.subTheme || "",
-                  mainTheme: m.mainTheme || "",
-                  confidence: m.confidence || 75,
+                  themeMappings: Array.isArray(m.mappings) && m.mappings.length > 0
+                    ? m.mappings
+                    : [{ granularTheme: "Unmapped", subTheme: "", mainTheme: "Uncategorized", confidence: 0 }],
                 });
               }
             });
@@ -1200,12 +1553,14 @@ export default function App() {
           if (bi < batches - 1) await new Promise(r => setTimeout(r, 800));
         }
 
-        addLog(`  ✓ Done: ${mappedData.length} requirements mapped for "${frameworkName}"`, "success");
+        const totalThemeMappings = mappedData.reduce((sum, r) => sum + (r.themeMappings?.length || 0), 0);
+        addLog(`  ✓ Done: ${mappedData.length} requirements, ${totalThemeMappings} theme mappings for "${frameworkName}"`, "success");
         allMapped.push(...mappedData);
       }
 
       setProgress(100); setProgressLabel("Complete ✓");
-      addLog(`Processing complete — ${allMapped.length} total requirements mapped`, "accent");
+      const totalTM = allMapped.reduce((sum, r) => sum + (r.themeMappings?.length || 0), 0);
+      addLog(`Processing complete — ${allMapped.length} requirements · ${totalTM} total theme mappings`, "accent");
       setResults(allMapped);
       setTimeout(() => setStep(3), 800);
     } catch (err) {
@@ -1219,15 +1574,21 @@ export default function App() {
 
   const exportCSV = () => {
     const header = "Framework,Section ID,Topic,Sub-Topic,Requirement,Granular Theme,Sub Theme,Main Theme,Confidence\n";
-    const rows = results.map(r =>
-      [r.framework, r.sectionId, r.topic, r.subTopic, r.requirement, r.granularTheme, r.subTheme, r.mainTheme, r.confidence]
-        .map(v => `"${String(v || "").replace(/"/g, '""')}"`)
-        .join(",")
-    );
+    // Expand: one CSV row per requirement × theme mapping
+    const rows = [];
+    results.forEach(r => {
+      (r.themeMappings || []).forEach(tm => {
+        rows.push(
+          [r.framework, r.sectionId, r.topic, r.subTopic, r.requirement,
+           tm.granularTheme, tm.subTheme, tm.mainTheme, tm.confidence]
+            .map(v => `"${String(v || "").replace(/"/g, '""')}"`)
+            .join(",")
+        );
+      });
+    });
     const blob = new Blob([header + rows.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "framework-mapping.csv"; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = "framework-mapping.csv"; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -1244,23 +1605,29 @@ export default function App() {
   const allFrameworks = [...new Set(results.map(r => r.framework))];
   const filteredResults = activeFilter === "ALL" ? results : results.filter(r => r.framework === activeFilter);
 
-  // By framework (for document view)
+  // Total theme-mapping rows (for stats)
+  const totalMappingCount = filteredResults.reduce((sum, r) => sum + (r.themeMappings?.length || 0), 0);
+
+  // By framework (for document view) — results keep their multi-mapping structure
   const byFramework = {};
   filteredResults.forEach(r => {
     if (!byFramework[r.framework]) byFramework[r.framework] = [];
     byFramework[r.framework].push(r);
   });
 
-  // By main > sub > granular (for theme view)
+  // By main > sub > granular (for theme view) — expand each requirement across all its mappings
+  // FIX 5: normalise all theme names at grouping time to prevent duplicate groups from prefix variants
   const byMain = {};
   filteredResults.forEach(r => {
-    const main = r.mainTheme || "Uncategorized";
-    const sub = r.subTheme || "General";
-    const granular = r.granularTheme || "Uncategorized";
-    if (!byMain[main]) byMain[main] = {};
-    if (!byMain[main][sub]) byMain[main][sub] = {};
-    if (!byMain[main][sub][granular]) byMain[main][sub][granular] = [];
-    byMain[main][sub][granular].push(r);
+    (r.themeMappings || []).forEach(tm => {
+      const main = normaliseThemeName(tm.mainTheme) || "Uncategorized";
+      const sub = normaliseThemeName(tm.subTheme) || "General";
+      const granular = normaliseThemeName(tm.granularTheme) || "Uncategorized";
+      if (!byMain[main]) byMain[main] = {};
+      if (!byMain[main][sub]) byMain[main][sub] = {};
+      if (!byMain[main][sub][granular]) byMain[main][sub][granular] = [];
+      byMain[main][sub][granular].push({ ...r, confidence: tm.confidence });
+    });
   });
 
   const STEPS = ["01 · Config", "02 · Upload", "03 · Processing", "04 · Results"];
@@ -1467,7 +1834,7 @@ export default function App() {
 
                   {files.length > 0 && (
                     <div className="warn-box">
-                      ⚠ Large documents (100+ pages) generate many API calls and may take several minutes. Each document is chunked into ~5000-char segments for extraction, then requirements are mapped in batches of 20.
+                      ⚠ Large documents (100+ pages) generate many API calls and may take several minutes. Each document is chunked into ~5000-char segments for extraction, then requirements are mapped in batches of 10 with a validator pass per requirement.
                     </div>
                   )}
 
@@ -1534,27 +1901,35 @@ export default function App() {
                   {/* Stats */}
                   <div className="stat-row">
                     <div className="stat-box">
-                      <div className="stat-val">{results.length}</div>
+                      <div className="stat-val">{filteredResults.length}</div>
                       <div className="stat-label">Requirements</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-val">{totalMappingCount}</div>
+                      <div className="stat-label">Theme Mappings</div>
                     </div>
                     <div className="stat-box">
                       <div className="stat-val">{allFrameworks.length}</div>
                       <div className="stat-label">Frameworks</div>
                     </div>
                     <div className="stat-box">
-                      <div className="stat-val">{[...new Set(results.map(r => r.mainTheme).filter(Boolean))].length}</div>
+                      <div className="stat-val">{[...new Set(filteredResults.flatMap(r => (r.themeMappings||[]).map(tm => normaliseThemeName(tm.mainTheme))).filter(Boolean))].length}</div>
                       <div className="stat-label">Main Themes</div>
                     </div>
                     <div className="stat-box">
-                      <div className="stat-val">{[...new Set(results.map(r => r.subTheme).filter(Boolean))].length}</div>
+                      <div className="stat-val">{[...new Set(filteredResults.flatMap(r => (r.themeMappings||[]).map(tm => normaliseThemeName(tm.subTheme))).filter(Boolean))].length}</div>
                       <div className="stat-label">Sub Themes</div>
                     </div>
                     <div className="stat-box">
-                      <div className="stat-val">{[...new Set(results.map(r => r.granularTheme).filter(Boolean))].length}</div>
+                      <div className="stat-val">{[...new Set(filteredResults.flatMap(r => (r.themeMappings||[]).map(tm => normaliseThemeName(tm.granularTheme))).filter(Boolean))].length}</div>
                       <div className="stat-label">Granular Themes</div>
                     </div>
                     <div className="stat-box">
-                      <div className="stat-val">{results.length > 0 ? Math.round(results.reduce((a, r) => a + (r.confidence || 75), 0) / results.length) : 0}%</div>
+                      <div className="stat-val">
+                        {totalMappingCount > 0
+                          ? Math.round(filteredResults.flatMap(r => (r.themeMappings||[]).map(tm => tm.confidence || 0)).reduce((a, b) => a + b, 0) / totalMappingCount)
+                          : 0}%
+                      </div>
                       <div className="stat-label">Avg Confidence</div>
                     </div>
                   </div>
@@ -1583,13 +1958,13 @@ export default function App() {
                     <>
                       <div className="section-divider"><span>Results by Framework → Requirements → Theme Mapping</span></div>
                       <div className="info-box" style={{ marginBottom: 16 }}>
-                        <strong>Columns:</strong> Section ID · Topic · Sub-Topic · Requirement (from the document) → Granular Theme · Sub Theme · Main Theme (from your taxonomy)
+                        <strong>Columns:</strong> Section ID · Topic · Sub-Topic · Requirement (extracted from document) → Theme Mappings (each requirement may map to multiple granular themes; each mapping shows Granular → Sub → Main theme with confidence score)
                       </div>
                       {Object.keys(byFramework).length === 0 ? (
                         <div className="empty-state"><div className="empty-icon">◈</div><div>No results to display</div></div>
                       ) : (
                         Object.entries(byFramework).sort((a, b) => a[0].localeCompare(b[0])).map(([fw, rows]) => (
-                          <FrameworkTableBlock key={fw} framework={fw} rows={rows} show={true} />
+                          <FrameworkTableBlock key={fw} framework={fw} rows={rows} />
                         ))
                       )}
                     </>

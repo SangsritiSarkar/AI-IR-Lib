@@ -1,6 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
-const API = "http://localhost:8000";
+const API = (() => {
+     const host = window.location.hostname;
+     if (host.includes("app.github.dev")) {
+       return "https://" + host.replace("-3000", "-8000");
+     }
+     return "http://localhost:8000";
+   })();
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {

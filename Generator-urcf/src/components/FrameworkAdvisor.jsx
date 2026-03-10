@@ -8,7 +8,7 @@ import { MessageSquare, Send, Sparkles, CheckCircle2, Circle, ChevronRight, Rota
  * 3. User can select/deselect recommended frameworks
  * 4. Parent receives selectedFrameworks → filters table + export
  */
-export default function FrameworkAdvisor({ frameworks, config, onFrameworksSelected, onClose }) {
+export default function FrameworkAdvisor({ frameworks, config, onFrameworksSelected, onClose, showCloseAsNext = false }) {
   const [messages, setMessages]         = useState([
     {
       role: 'assistant',
@@ -149,9 +149,15 @@ Rules:
               <RotateCcw size={10} /> Reset
             </button>
           )}
-          <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded dark:hover:bg-[#1f2535] hover:bg-slate-100 dark:text-slate-400 text-slate-500 transition-colors">
-            <X size={13} />
-          </button>
+          {showCloseAsNext ? (
+            <button onClick={onClose} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-gradient-to-r from-violet-600 to-violet-500 text-white hover:from-violet-500 hover:to-violet-400 transition-all">
+              View Table <ChevronRight size={11} />
+            </button>
+          ) : (
+            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded dark:hover:bg-[#1f2535] hover:bg-slate-100 dark:text-slate-400 text-slate-500 transition-colors">
+              <X size={13} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -279,12 +285,20 @@ Rules:
                 {confirmed ? <><CheckCircle2 size={11} /> Applied!</> : <><ChevronRight size={11} /> Apply ({selected.length})</>}
               </button>
               {confirmed && (
-                <button
-                  onClick={showAll}
-                  className="w-full py-1.5 rounded-lg text-[11px] dark:text-slate-400 text-slate-500 dark:hover:text-slate-200 hover:text-slate-700 transition-colors"
-                >
-                  Show all frameworks
-                </button>
+                <>
+                  <button
+                    onClick={onClose}
+                    className="w-full py-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 dark:bg-cyan-900/30 bg-cyan-50 dark:border-cyan-800/30 border-cyan-200 border dark:text-cyan-300 text-cyan-700 hover:dark:bg-cyan-900/50 transition-colors"
+                  >
+                    View Table <ChevronRight size={11} />
+                  </button>
+                  <button
+                    onClick={showAll}
+                    className="w-full py-1.5 rounded-lg text-[10px] dark:text-slate-500 text-slate-400 dark:hover:text-slate-300 hover:text-slate-600 transition-colors"
+                  >
+                    Show all frameworks
+                  </button>
+                </>
               )}
             </div>
           </div>

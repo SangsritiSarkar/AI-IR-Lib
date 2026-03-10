@@ -118,7 +118,8 @@ export default function App() {
     abortRef.current = { aborted: false }
     setProcessingStatus('running')
     setProgressCompleted(0)
-    const rowsToProcess = parsedData.rows.filter(r => r._hasFrameworkData)
+    // Only process rows visible in current filtered view that have framework data
+    const rowsToProcess = visibleRows.filter(r => r._hasFrameworkData)
     setProgressTotal(rowsToProcess.length)
     const updatedRows = parsedData.rows.map(r => ({ ...r }))
     try {
@@ -156,7 +157,11 @@ export default function App() {
     if (!parsedData) return
     try {
       const fwToExport  = fwOverride || activeFrameworks || parsedData.frameworks
-      const rowsToExport = parsedData.rows.map(row => ({
+      // When exporting with a filter, only include rows that have data for the selected frameworks
+      const sourceRows = (fwOverride === parsedData.frameworks)
+        ? parsedData.rows  // "Export all" uses all rows
+        : visibleRows      // filtered export uses visible rows only
+      const rowsToExport = sourceRows.map(row => ({
         ...row,
         frameworkSections: Object.fromEntries(
           Object.entries(row.frameworkSections || {}).filter(([k]) => fwToExport.includes(k))
@@ -174,6 +179,15 @@ export default function App() {
   const dataReady    = !!parsedData
   const isProcessing = processingStatus === 'running'
   const aiDone       = parsedData?.rows.filter(r => r.controlRequirements && !String(r.controlRequirements).startsWith('Error')).length > 0
+
+  // When frameworks are filtered via Advisor, only show rows that have data for at least one selected framework
+  const visibleRows = !parsedData ? [] : (
+    activeFrameworks
+      ? parsedData.rows.filter(row =>
+          activeFrameworks.some(fw => row.frameworkSections?.[fw]?.trim())
+        )
+      : parsedData.rows
+  )
 
   return (
     <div className={`h-screen flex flex-col overflow-hidden ${dark ? 'dark' : ''}`}>
@@ -359,7 +373,7 @@ export default function App() {
             <div className="shrink-0 px-6 py-3 dark:bg-[#0e1119] bg-white dark:border-[#1f2535] border-slate-200 border-b flex items-center gap-3 flex-wrap">
 
               {/* Stats */}
-              <Stat label="Themes"    value={parsedData.rows.length}                                             color="violet" />
+              <Stat label="Themes"    value={visibleRows.length + (activeFrameworks && visibleRows.length < parsedData.rows.length ? ` / ${parsedData.rows.length}` : '')}  color="violet" />
               <Stat label="Frameworks" value={(activeFrameworks || parsedData.frameworks).length}                 color="cyan"   />
               <Stat label="Matched"   value={parsedData.matchCount}                                              color="green"  />
               <Stat label="AI Done"   value={parsedData.rows.filter(r => r.controlRequirements && !String(r.controlRequirements).startsWith('Error')).length} color="amber" />
@@ -426,7 +440,7 @@ export default function App() {
             {/* Table */}
             <div className="flex-1 overflow-hidden px-6 py-3">
               <OutputTable
-                rows={parsedData.rows}
+                rows={visibleRows}
                 frameworks={activeFrameworks || parsedData.frameworks}
                 allFrameworks={parsedData.frameworks}
               />

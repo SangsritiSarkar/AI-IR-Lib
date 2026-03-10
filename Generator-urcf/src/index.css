@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Dark mode defaults */
+  .dark body {
+    background-color: #07090f;
+    color: #e2e8f0;
+  }
+
+  /* Light mode defaults */
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
+
+  /* Custom scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: #2a3347;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+}
+
+@layer components {
+  /* Table cell text truncation */
+  .cell-clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Resizer for table columns */
+  .resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 100%;
+    width: 4px;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+  }
+
+  .resizer.isResizing {
+    background: #7c3aed;
+    opacity: 1;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(90deg, #c4b5fd, #7dd3fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Glow effects */
+  .glow-violet {
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);
+  }
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.25);
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed;
+    transition: all 0.2s ease;
+  }
+
+  /* Progress bar animation */
+  .progress-bar {
+    transition: width 0.3s ease;
+  }
+
+  /* Row expand animation */
+  .row-expand {
+    animation: expandDown 0.2s ease-out;
+  }
+
+  @keyframes expandDown {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Sticky columns */
+  .sticky-col-1 { position: sticky; left: 0; z-index: 10; }
+  .sticky-col-2 { position: sticky; left: 140px; z-index: 10; }
+  .sticky-col-3 { position: sticky; left: 280px; z-index: 10; }
+
+  /* Table header gradient line */
+  .table-header-line::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #7c3aed, #0ea5e9, #7c3aed);
+  }
+}
+
+/* Toaster overrides */
+.dark .go2072408551 {
+  background: #141820 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #2a3347 !important;
+}

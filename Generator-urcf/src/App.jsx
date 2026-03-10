@@ -2,12 +2,13 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { Toaster, toast } from 'react-hot-toast'
 import {
   Settings, Moon, Sun, Download, Play, Shield,
-  FileSpreadsheet, Layers, AlertCircle, Info
+  FileSpreadsheet, Layers, AlertCircle, Info, MessageSquare, Filter
 } from 'lucide-react'
 import SettingsPanel from './components/SettingsPanel'
 import FileUpload from './components/FileUpload'
 import ProcessingProgress from './components/ProcessingProgress'
 import OutputTable from './components/OutputTable'
+import FrameworkAdvisor from './components/FrameworkAdvisor'
 import { parseThemeList, parseFrameworkWorkbook, buildCombinedRows } from './lib/excelParser'
 import { processAllRows } from './lib/azureOpenAI'
 import { exportToExcel } from './lib/excelExporter'
@@ -41,6 +42,10 @@ export default function App() {
   const [progressTotal, setProgressTotal] = useState(0)
   const [currentTheme, setCurrentTheme] = useState('')
   const abortRef = useRef({ aborted: false })
+
+  // Framework Advisor state
+  const [advisorOpen, setAdvisorOpen]             = useState(false)
+  const [activeFrameworks, setActiveFrameworks]   = useState(null) // null = all, array = filtered
 
   // Persist dark mode
   useEffect(() => {
@@ -159,10 +164,17 @@ export default function App() {
     abortRef.current.aborted = true
   }
 
-  const handleExport = () => {
+  const handleExport = (frameworksOverride) => {
     if (!parsedData) { toast.error('No data to export'); return }
     try {
-      exportToExcel(parsedData.rows, parsedData.frameworks)
+      const fwToExport = frameworksOverride || activeFrameworks || parsedData.frameworks
+      const rowsToExport = parsedData.rows.map(row => ({
+        ...row,
+        frameworkSections: Object.fromEntries(
+          Object.entries(row.frameworkSections || {}).filter(([k]) => fwToExport.includes(k))
+        )
+      }))
+      exportToExcel(rowsToExport, fwToExport)
       toast.success('Excel file downloaded')
     } catch (err) {
       toast.error('Export failed: ' + err.message)
@@ -258,7 +270,8 @@ export default function App() {
               </div>
 
               {/* Action buttons */}
-              <div className="flex flex-col gap-2 shrink-0 min-w-[160px]">
+              <div className="flex flex-col gap-2 shrink-0 min-w-[180px]">
+
                 <button
                   onClick={handleParseFiles}
                   disabled={!filesReady || isParsing || isProcessing}
@@ -269,6 +282,58 @@ export default function App() {
                   <Layers size={14} />
                   {isParsing ? 'Parsing…' : 'Parse Files'}
                 </button>
+
+                {/* After parsing: show two mode options */}
+                {dataReady && (
+                  <div className="rounded-xl dark:bg-[#0a0e17] bg-slate-50 dark:border-[#2a3347] border-slate-200 border overflow-hidden">
+                    <p className="text-[10px] font-semibold dark:text-slate-500 text-slate-400 px-3 pt-2 pb-1 uppercase tracking-wide">View Mode</p>
+
+                    {/* Option 1: Framework Advisor */}
+                    <button
+                      onClick={() => setAdvisorOpen(v => !v)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium transition-all border-t dark:border-[#1f2535] border-slate-200 ${
+                        advisorOpen
+                          ? 'dark:bg-violet-950/50 bg-violet-50 dark:text-violet-300 text-violet-700'
+                          : 'dark:hover:bg-[#141820] hover:bg-white dark:text-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                        advisorOpen ? 'bg-violet-500' : 'dark:bg-[#1f2535] bg-slate-200'
+                      }`}>
+                        <MessageSquare size={12} className={advisorOpen ? 'text-white' : 'dark:text-slate-400 text-slate-500'} />
+                      </div>
+                      <div className="text-left">
+                        <p className="leading-none">Framework Advisor</p>
+                        <p className="text-[10px] dark:text-slate-500 text-slate-400 mt-0.5 font-normal leading-none">AI industry analysis</p>
+                      </div>
+                      {activeFrameworks && (
+                        <span className="ml-auto px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-violet-500 text-white shrink-0">
+                          {activeFrameworks.length}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Option 2: Full URCF */}
+                    <button
+                      onClick={() => { setAdvisorOpen(false); setActiveFrameworks(null) }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-medium transition-all border-t dark:border-[#1f2535] border-slate-200 ${
+                        !advisorOpen && !activeFrameworks
+                          ? 'dark:bg-cyan-950/30 bg-cyan-50 dark:text-cyan-300 text-cyan-700'
+                          : 'dark:hover:bg-[#141820] hover:bg-white dark:text-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                        !advisorOpen && !activeFrameworks ? 'bg-cyan-600' : 'dark:bg-[#1f2535] bg-slate-200'
+                      }`}>
+                        <Layers size={12} className={!advisorOpen && !activeFrameworks ? 'text-white' : 'dark:text-slate-400 text-slate-500'} />
+                      </div>
+                      <div className="text-left">
+                        <p className="leading-none">Full URCF</p>
+                        <p className="text-[10px] dark:text-slate-500 text-slate-400 mt-0.5 font-normal leading-none">All {parsedData.frameworks.length} frameworks</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
 
                 <button
                   onClick={handleGenerate}
@@ -366,12 +431,67 @@ export default function App() {
         </div>
 
         {/* TABLE AREA */}
-        <div className="flex-1 overflow-hidden px-6 py-4">
-          {!dataReady ? (
-            <EmptyState hasFiles={filesReady} />
-          ) : (
-            <OutputTable rows={parsedData.rows} frameworks={parsedData.frameworks} />
+        <div className="flex-1 overflow-hidden flex flex-col">
+
+          {/* Active filter banner */}
+          {dataReady && activeFrameworks && (
+            <div className="shrink-0 mx-6 mt-3 flex items-center gap-3 px-3 py-2 rounded-lg dark:bg-violet-950/30 bg-violet-50 dark:border-violet-800/30 border-violet-200 border">
+              <Filter size={12} className="dark:text-violet-400 text-violet-600 shrink-0" />
+              <p className="text-[11px] dark:text-violet-300 text-violet-700 flex-1">
+                <span className="font-semibold">Filtered view:</span> showing {activeFrameworks.length} of {parsedData.frameworks.length} frameworks — {activeFrameworks.join(', ')}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleExport(activeFrameworks)}
+                  className="text-[10px] px-2 py-1 rounded-md bg-violet-500 text-white font-medium hover:bg-violet-400 transition-colors"
+                >
+                  Export filtered
+                </button>
+                <button
+                  onClick={() => handleExport(parsedData.frameworks)}
+                  className="text-[10px] px-2 py-1 rounded-md dark:bg-[#1f2535] bg-white dark:text-slate-300 text-slate-600 dark:border-[#2a3347] border-slate-200 border font-medium hover:dark:text-white hover:text-slate-900 transition-colors"
+                >
+                  Export all
+                </button>
+                <button
+                  onClick={() => setActiveFrameworks(null)}
+                  className="text-[10px] px-2 py-1 rounded-md dark:text-slate-500 text-slate-400 hover:dark:text-slate-200 hover:text-slate-600 transition-colors"
+                >
+                  Clear filter
+                </button>
+              </div>
+            </div>
           )}
+
+          <div className="flex-1 overflow-hidden flex gap-4 px-6 py-3">
+            {/* Main table */}
+            <div className="flex-1 overflow-hidden">
+              {!dataReady ? (
+                <EmptyState hasFiles={filesReady} />
+              ) : (
+                <OutputTable
+                  rows={parsedData.rows}
+                  frameworks={activeFrameworks || parsedData.frameworks}
+                  allFrameworks={parsedData.frameworks}
+                />
+              )}
+            </div>
+
+            {/* Advisor panel — slides in alongside table */}
+            {advisorOpen && dataReady && (
+              <div className="w-[520px] shrink-0">
+                <FrameworkAdvisor
+                  frameworks={parsedData.frameworks}
+                  config={mergedConfig}
+                  onFrameworksSelected={(fws) => {
+                    setActiveFrameworks(fws)
+                    if (fws) toast.success(`Filtered to ${fws.length} frameworks`)
+                  }}
+                  onClose={() => setAdvisorOpen(false)}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

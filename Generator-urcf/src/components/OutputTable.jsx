@@ -57,7 +57,7 @@ function FilterSelect({ column, label }) {
   )
 }
 
-export default function OutputTable({ rows, frameworks }) {
+export default function OutputTable({ rows, frameworks, allFrameworks }) {
   const [expandedRows, setExpandedRows] = useState(new Set())
   const [globalFilter, setGlobalFilter] = useState('')
   const [sorting, setSorting] = useState([])

@@ -216,7 +216,7 @@ Rules:
                 onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
                 placeholder="Describe your industry, company size, geography…"
                 disabled={loading}
-                className="flex-1 bg-transparent text-[12px] dark:text-slate-200 text-slate-700 dark:placeholder-slate-600 placeholder-slate-400 outline-none px-1"
+                className="flex-1 bg-transparent text-sm dark:text-slate-200 text-slate-700 dark:placeholder-slate-600 placeholder-slate-400 outline-none px-1"
               />
               <button
                 onClick={sendMessage}
@@ -233,7 +233,7 @@ Rules:
         {recommended.length > 0 && (
           <div className="w-56 shrink-0 flex flex-col dark:border-[#1f2535] border-slate-200 border-l overflow-hidden">
             <div className="px-3 py-2.5 dark:bg-[#0e1119] bg-slate-50 dark:border-[#1f2535] border-slate-200 border-b shrink-0">
-              <p className="text-[10px] font-semibold dark:text-slate-300 text-slate-600">Framework Selection</p>
+              <p className="text-xs font-semibold dark:text-slate-300 text-slate-600">Framework Selection</p>
               <div className="flex gap-1.5 mt-1.5">
                 <button onClick={selectAll}  className="text-[10px] px-1.5 py-0.5 rounded dark:bg-[#1f2535] bg-slate-200 dark:text-slate-400 text-slate-500 hover:dark:text-violet-300 hover:text-violet-600 transition-colors">All</button>
                 <button onClick={selectNone} className="text-[10px] px-1.5 py-0.5 rounded dark:bg-[#1f2535] bg-slate-200 dark:text-slate-400 text-slate-500 hover:dark:text-violet-300 hover:text-violet-600 transition-colors">None</button>
@@ -280,7 +280,7 @@ Rules:
               <button
                 onClick={applySelection}
                 disabled={selected.length === 0}
-                className="w-full py-2 rounded-lg text-[11px] font-semibold text-white bg-gradient-to-r from-violet-600 to-violet-500 disabled:opacity-40 hover:from-violet-500 hover:to-violet-400 transition-all flex items-center justify-center gap-1.5"
+                className="w-full py-2 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-violet-600 to-violet-500 disabled:opacity-40 hover:from-violet-500 hover:to-violet-400 transition-all flex items-center justify-center gap-1.5"
               >
                 {confirmed ? <><CheckCircle2 size={11} /> Applied!</> : <><ChevronRight size={11} /> Apply ({selected.length})</>}
               </button>
@@ -325,14 +325,14 @@ function FrameworkCheckRow({ name, priority, reason, checked, onChange, priority
         }
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium dark:text-slate-200 text-slate-700 leading-tight truncate">{name}</p>
+        <p className="text-xs font-medium dark:text-slate-200 text-slate-700 leading-tight truncate">{name}</p>
         {priority && (
           <span className={`text-[9px] px-1 py-0.5 rounded border font-medium inline-block mt-0.5 ${priorityColor}`}>
             {priority}
           </span>
         )}
         {reason && (
-          <p className="text-[10px] dark:text-slate-500 text-slate-400 mt-0.5 leading-tight line-clamp-2">{reason}</p>
+          <p className="text-[11px] dark:text-slate-500 text-slate-400 mt-0.5 leading-tight line-clamp-2">{reason}</p>
         )}
       </div>
     </button>

@@ -1,37 +1,42 @@
 import * as XLSX from 'xlsx-js-style'
 
 /**
- * CONFIRMED LAYOUT from actual files:
+ * ThemeList.xlsx layout:
+ *   Row 5 (index 4): Main category headers spanning merged columns
+ *                    Pattern: /^\d{2}\./  → "01. IT Strategy", "02. Information Security"
  *
- * ThemeList.xlsx — WIDE/COLUMNAR layout:
- *   Row 5: Main category headers across columns B-N (with merged cells spanning)
- *          B5="01. IT Strategy", C5="02. Information Security", E5="03. Infrastructure Security"...
- *   Row 6: Sub-category headers — one per column
- *          B6="1.1.Strategy & Planning", C6="2.1. Identity & Access Management", D6="2.4. Logging"...
- *   Rows 7-43: Theme values going DOWN each column
- *          B7="1.1.1. Management Reporting", B8="1.1.2. IT Strategy"...
- *          C7="2.1.1. User Access Provisioning"...
+ *   Rows 6+: Each column contains sub-categories AND themes mixed together going downward.
+ *            Sub-category pattern: /^\d+\.\d+\.\s/   → "1.1. Strategy & Planning"
+ *                                  exactly 2 numeric levels + dot + space
+ *                                  (NOT matching 1.1.1 — the extra \.\s guard prevents it)
+ *            Theme pattern:        /^\d+\.\d+\.\d+/  → "1.1.1. Management Reporting"
+ *                                  exactly 3 numeric levels
  *
- * Framework Workbook — each sheet:
- *   Row 3: Headers — col B=Source Name, C=Topic, D=Sub Topic, E=Section Number, F=Requirement, G=Themes
- *   Row 4+: Data
- *   Theme column (G) contains LABEL-ONLY values like "IT Policies and Standards Management"
- *   (NO number prefix — just the name after the dot in ThemeList)
+ *   Hierarchy is derived purely from pattern, not row position:
+ *     01 owns all 1.x sub-categories
+ *     1.1 owns all 1.1.x themes
+ *     02 owns all 2.x sub-categories
+ *     2.1 owns all 2.1.x themes  ...etc.
  */
 
-/**
- * Parse ThemeList — wide columnar layout.
- * Returns [ { mainCategory, subCategory, theme, themeLabel } ]
- * themeLabel = label part only e.g. "Management Reporting" (used for matching workbook)
- */
+// Classify purely by number of dots in the leading numeric prefix:
+//   01.       → 1 dot → main category
+//   1.1.      → 2 dots → sub-category
+//   1.1.1.    → 3 dots → theme
+const _dotCount = (v) => { const m = v.match(/^[\d.]+/); return m ? m[0].split('.').length - 1 : 0 }
+const isMainCat = (v) => _dotCount(v) === 1
+const isSubCat  = (v) => _dotCount(v) === 2
+const isTheme   = (v) => _dotCount(v) === 3
+const toLabel   = (v) => v.replace(/^[\d.]+\s*/, '').trim()
+
 export function parseThemeList(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const wb    = XLSX.read(e.target.result, { type: 'array' })
-        const ws    = wb.Sheets[wb.SheetNames[0]]
-        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z50')
+        const wb     = XLSX.read(e.target.result, { type: 'array' })
+        const ws     = wb.Sheets[wb.SheetNames[0]]
+        const range  = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z50')
         const maxRow = range.e.r
         const maxCol = range.e.c
 
@@ -40,73 +45,64 @@ export function parseThemeList(file) {
           return cell ? String(cell.v ?? '').trim() : ''
         }
 
-        // ── Row 5 (index 4) = main category headers ──────────────────────────
-        // ── Row 6 (index 5) = sub-category headers ───────────────────────────
-        const MAIN_ROW = 4   // 0-indexed
-        const SUB_ROW  = 5
-        const DATA_START = 6
+        // ── Row 5 (index 4): main category headers ──────────────────────────
+        const MAIN_ROW   = 4
+        const DATA_START = 5
 
-        // Build main category map per column
-        // Main cats span merged columns — forward-fill from last seen value
+        // Build colToMain — forward-fill across merged cells
         const colToMain = {}
         let lastMain = ''
         for (let c = 0; c <= maxCol; c++) {
           const v = getCell(MAIN_ROW, c)
-          if (v) lastMain = v
+          if (v && isMainCat(v)) lastMain = v
           colToMain[c] = lastMain
         }
-
-        // Also handle XLSX merged cells explicitly
-        const merges = ws['!merges'] || []
-        for (const m of merges) {
+        // Also apply XLSX merge metadata explicitly
+        for (const m of (ws['!merges'] || [])) {
           if (m.s.r === MAIN_ROW) {
             const v = getCell(m.s.r, m.s.c)
-            if (v) {
+            if (v && isMainCat(v)) {
               for (let c = m.s.c; c <= m.e.c; c++) colToMain[c] = v
             }
           }
         }
 
-        // Build sub-category map per column (row 6, no merging needed)
-        const colToSub = {}
-        for (let c = 0; c <= maxCol; c++) {
-          colToSub[c] = getCell(SUB_ROW, c)
-        }
-
-        // ── Collect all theme entries from rows 7-43 ─────────────────────────
-        const isTheme = (v) => /^\d+\.\d+\.\d+/.test(v)
-        // Strip leading number prefix: "1.1.1. Management Reporting" → "Management Reporting"
-        const toLabel = (v) => v.replace(/^\d[\d.]*\.\s*/, '').trim()
-
+        // ── Scan each column downward, tracking sub-category context ─────────
         const themes = []
         const seen   = new Set()
 
-        // Iterate COLUMN-FIRST so all themes under one main category come together:
-        // All of col B (01. IT Strategy) first, then col C (02. Information Security), etc.
-        for (let c = 1; c <= maxCol; c++) {   // skip col 0 (row numbers)
+        for (let c = 1; c <= maxCol; c++) {
+          const mainCategory = colToMain[c] || ''
+          if (!mainCategory) continue
+
+          let currentSubCat = ''
+
           for (let r = DATA_START; r <= maxRow; r++) {
             const v = getCell(r, c)
-            if (!v || !isTheme(v)) continue
+            if (!v) continue
 
-            const mainCategory = colToMain[c] || ''
-            const subCategory  = colToSub[c]  || ''
-            if (!mainCategory) continue
-
-            const key = `${mainCategory}||${subCategory}||${v}`
-            if (seen.has(key)) continue
-            seen.add(key)
-
-            themes.push({
-              mainCategory,
-              subCategory,
-              theme:      v,
-              themeLabel: toLabel(v),   // e.g. "Management Reporting"
-            })
+            if (isSubCat(v)) {
+              // Update sub-category context — do NOT emit as a theme
+              currentSubCat = v
+            } else if (isTheme(v)) {
+              const key = `${mainCategory}||${currentSubCat}||${v}`
+              if (seen.has(key)) continue
+              seen.add(key)
+              themes.push({
+                mainCategory,
+                subCategory: currentSubCat,
+                theme:       v,
+                themeLabel:  toLabel(v),  // e.g. "Management Reporting"
+              })
+            }
+            // isMainCat values in data rows = noise, skip
           }
         }
 
         console.log(`[ThemeList] Parsed ${themes.length} themes`)
-        console.log('[ThemeList] Sample:', themes.slice(0, 5))
+        console.log('[ThemeList] Sample:', themes.slice(0, 6).map(
+          t => `${t.mainCategory} > ${t.subCategory} > ${t.theme}`
+        ))
         resolve(themes)
       } catch (err) {
         reject(new Error('Failed to parse ThemeList: ' + err.message))
@@ -119,9 +115,8 @@ export function parseThemeList(file) {
 
 /**
  * Parse Framework Workbook.
- * Each sheet = one framework (sheet name = column header in output).
- * Header row is row 3 (index 2). Columns: B=Source, C=Topic, D=SubTopic, E=Section, F=Requirement, G=Themes
- * Theme column contains label-only values (no number prefix).
+ * Each sheet = one framework. Header row found dynamically by looking for
+ * a row containing both "requirement" and "theme/themes" columns.
  */
 export function parseFrameworkWorkbook(file) {
   return new Promise((resolve, reject) => {
@@ -129,7 +124,7 @@ export function parseFrameworkWorkbook(file) {
     reader.onload = (e) => {
       try {
         const wb           = XLSX.read(e.target.result, { type: 'array' })
-        const frameworkMap = new Map()   // themeLabel → [row objects]
+        const frameworkMap = new Map()
         const frameworks   = []
 
         for (const sheetName of wb.SheetNames) {
@@ -138,7 +133,6 @@ export function parseFrameworkWorkbook(file) {
 
           const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
 
-          // Find header row — look for row with "requirement" AND ("theme" or "themes")
           let headerRowIdx = -1
           const colMap     = {}
 
@@ -149,19 +143,19 @@ export function parseFrameworkWorkbook(file) {
             if (hasReq && hasTheme) {
               headerRowIdx = i
               rowLow.forEach((key, idx) => {
-                if (key.includes('source'))                         colMap.sourceName    = idx
-                if (key === 'topic' || key === 'topics')            colMap.topic         = idx
-                if (key.includes('sub') && key.includes('topic'))   colMap.subTopic      = idx
-                if (key.includes('section'))                        colMap.sectionNumber = idx
-                if (key.includes('requirement'))                    colMap.requirements  = idx
-                if (key === 'theme' || key === 'themes')            colMap.theme         = idx
+                if (key.includes('source'))                        colMap.sourceName    = idx
+                if (key === 'topic' || key === 'topics')           colMap.topic         = idx
+                if (key.includes('sub') && key.includes('topic'))  colMap.subTopic      = idx
+                if (key.includes('section'))                       colMap.sectionNumber = idx
+                if (key.includes('requirement'))                   colMap.requirements  = idx
+                if (key === 'theme' || key === 'themes')           colMap.theme         = idx
               })
               break
             }
           }
 
           if (headerRowIdx === -1 || colMap.requirements === undefined || colMap.theme === undefined) {
-            console.warn(`[Workbook] Skipping sheet "${sheetName}" — header not found. colMap:`, colMap)
+            console.warn(`[Workbook] Skipping "${sheetName}" — header not found`)
             continue
           }
 
@@ -189,7 +183,7 @@ export function parseFrameworkWorkbook(file) {
             })
             added++
           }
-          console.log(`[Workbook] "${sheetName}": ${added} rows loaded (headerRow=${headerRowIdx}, themeCol=${colMap.theme})`)
+          console.log(`[Workbook] "${sheetName}": ${added} rows (headerRow=${headerRowIdx})`)
         }
 
         console.log(`[Workbook] ${frameworks.length} frameworks, ${frameworkMap.size} unique theme labels`)
@@ -205,12 +199,10 @@ export function parseFrameworkWorkbook(file) {
 
 /**
  * Match ThemeList entries against framework data.
- * Matching strategy (in order):
- *   1. Exact label match          "Management Reporting" == "Management Reporting"
- *   2. Normalised (strip symbols) handles "&" vs "and", extra spaces, slash variants
+ * 1. Exact label match
+ * 2. Normalised match (strips punctuation/symbols)
  */
 export function buildCombinedRows(themeList, frameworkMap, frameworks) {
-  // Build normalised index
   const norm = (s) => s.toLowerCase()
     .replace(/\s*\/\s*/g, '/')
     .replace(/[^a-z0-9/]/g, ' ')
@@ -223,9 +215,7 @@ export function buildCombinedRows(themeList, frameworkMap, frameworks) {
   }
 
   const findMatches = (themeLabel) => {
-    // 1. Exact
     if (frameworkMap.has(themeLabel)) return frameworkMap.get(themeLabel)
-    // 2. Normalised
     const n = norm(themeLabel)
     if (normIndex.has(n)) return normIndex.get(n)
     return []
@@ -234,7 +224,6 @@ export function buildCombinedRows(themeList, frameworkMap, frameworks) {
   const rows = themeList.map(({ mainCategory, subCategory, theme, themeLabel }) => {
     const matches = findMatches(themeLabel)
 
-    // Build per-framework section numbers (fallback to topic)
     const frameworkSections = {}
     for (const fw of frameworks) {
       const fwRows = matches.filter(r => r.framework === fw)
@@ -263,12 +252,10 @@ export function buildCombinedRows(themeList, frameworkMap, frameworks) {
 
   const matched = rows.filter(r => r._hasFrameworkData).length
   console.log(`[Match] ${matched} / ${rows.length} themes matched`)
-  if (matched < rows.length) {
-    const unmatched = themeList
-      .filter((t, i) => !rows[i]._hasFrameworkData)
-      .map(t => t.themeLabel)
-    console.warn('[Match] Unmatched labels:', unmatched)
-  }
+  const unmatched = themeList
+    .filter((t, i) => !rows[i]._hasFrameworkData)
+    .map(t => t.themeLabel)
+  if (unmatched.length) console.warn('[Match] Unmatched:', unmatched)
 
   return rows
 }

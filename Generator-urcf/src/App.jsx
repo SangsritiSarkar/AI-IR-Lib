@@ -11,7 +11,7 @@ import ProcessingProgress from './components/ProcessingProgress'
 import OutputTable from './components/OutputTable'
 import FrameworkAdvisor from './components/FrameworkAdvisor'
 import { parseThemeList, parseFrameworkWorkbook, buildCombinedRows } from './lib/excelParser'
-import { processAllRows } from './lib/azureOpenAI'
+import { generateAIContent } from './lib/azureOpenAI'
 import { exportToExcel } from './lib/excelExporter'
 
 // ── Wizard steps ────────────────────────────────────────────────────────────
@@ -118,27 +118,50 @@ export default function App() {
     abortRef.current = { aborted: false }
     setProcessingStatus('running')
     setProgressCompleted(0)
-    // Only process rows visible in current filtered view that have framework data
-    const rowsToProcess = visibleRows.filter(r => r._hasFrameworkData)
+
+    // Build list of ONLY visible rows that need AI content, preserving their original index
+    const rowsToProcess = visibleRows
+      .map(row => ({ row, origIdx: parsedData.rows.indexOf(row) }))
+      .filter(({ row }) => row._hasFrameworkData)
+
     setProgressTotal(rowsToProcess.length)
-    const updatedRows = parsedData.rows.map(r => ({ ...r }))
+    let completed = 0
+
     try {
-      await processAllRows(
-        mergedConfig, updatedRows,
-        (completed, total, theme) => {
-          setProgressCompleted(completed); setProgressTotal(total); setCurrentTheme(theme)
-        },
-        (idx, result) => {
-          updatedRows[idx] = { ...updatedRows[idx], ...result }
-          setParsedData(prev => {
-            if (!prev) return prev
-            const newRows = [...prev.rows]
-            newRows[idx] = { ...newRows[idx], ...result }
-            return { ...prev, rows: newRows }
-          })
-        },
-        abortRef.current
-      )
+      // Process in batches of CONCURRENCY=3, using original index to update state
+      const CONCURRENCY = 3
+      const queue = [...rowsToProcess]
+
+      const worker = async () => {
+        while (queue.length > 0 && !abortRef.current.aborted) {
+          const item = queue.shift()
+          if (!item) continue
+          const { row, origIdx } = item
+          try {
+            const result = await generateAIContent(mergedConfig, row)
+            completed++
+            setProgressCompleted(completed)
+            setCurrentTheme(row.theme)
+            setParsedData(prev => {
+              if (!prev) return prev
+              const newRows = [...prev.rows]
+              newRows[origIdx] = { ...newRows[origIdx], ...result }
+              return { ...prev, rows: newRows }
+            })
+          } catch (err) {
+            completed++
+            setProgressCompleted(completed)
+            setParsedData(prev => {
+              if (!prev) return prev
+              const newRows = [...prev.rows]
+              newRows[origIdx] = { ...newRows[origIdx], controlRequirements: `Error: ${err.message}`, testProcedures: '', riskNarratives: '' }
+              return { ...prev, rows: newRows }
+            })
+          }
+        }
+      }
+
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, rowsToProcess.length) }, worker))
       if (!abortRef.current.aborted) {
         setProcessingStatus('done')
         toast.success('AI generation complete!')

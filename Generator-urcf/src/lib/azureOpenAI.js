@@ -56,9 +56,44 @@ ${reqText}
 
 Generate a JSON object with exactly these three keys:
 
-"controlRequirements": A concise consolidated summary of all the above requirements. Write as numbered points separated by actual newlines (\n). Each point on its own line. Max 5 points. Be specific and actionable. Example format: "1. First point.\n2. Second point.\n3. Third point."
+"controlRequirements": 
+Synthesize the above framework requirements into concise and concrete control statements aligned with the control theme.
 
-"testProcedures": Practical audit/testing procedures. Write as numbered questions starting with "Are..." or "Is...". Each on its own line separated by \n. Max 5 points. Example: "1. Are controls documented?\n2. Is access reviewed regularly?"
+Each point should represent a specific management or governance action (e.g., define, establish, report, monitor, review).
+
+Guidelines:
+- Do NOT describe programs or frameworks.
+- Avoid broad phrases like "establish mechanisms" or "ensure processes".
+- Write direct and specific control actions similar to audit control requirements.
+- Each point should be short, precise, and implementation-focused.
+
+Format:
+- Numbered list
+- Each point on its own line separated by \n
+- Maximum 5 points
+
+Example:
+"1. Define metrics for IT-related goals to support management reporting.\n2. Produce periodic reports on progress toward IT objectives for senior management.\n3. Monitor the effectiveness of stakeholder communication related to IT performance."
+
+
+"testProcedures":
+
+Write practical audit test procedures to verify whether the control requirements are implemented.
+
+Guidelines:
+- Each question should directly test one of the control requirements.
+- Questions should verify existence, implementation, or effectiveness of the control.
+- Avoid generic governance or maturity questions.
+- Questions should be suitable for auditors reviewing documentation, reports, or processes.
+
+Format:
+- Numbered questions
+- Start each question with "Is" or "Are"
+- Each on its own line separated by \n
+- Maximum 6 points
+
+Example:
+"1. Are metrics defined for reporting on IT-related goals?\n2. Are periodic reports on IT goal progress produced for senior management?\n3. Do management reports include progress toward objectives, deliverables, and risk status?\n4. Are stakeholder communications regarding IT performance periodically reviewed for effectiveness?"
 
 "riskNarratives": Business risks if controls are absent. Each on its own line separated by \n. Max 3 numbered points.
 

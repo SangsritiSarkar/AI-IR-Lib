@@ -264,25 +264,50 @@ export function useCyberScan() {
       const sys =
 `You are a cybersecurity and privacy compliance expert.
 Return a JSON object with EXACTLY these keys:
+
 - currentVersion: current version/status as of end of ${endYear}
-- recentChanges: bullet list of updates ONLY within ${dateScope}. Use \\n\u2022 per bullet.
+
+- recentChanges: bullet list of updates ONLY within ${dateScope}.
   STRICT REQUIREMENTS for each bullet:
-  1. MUST include the exact Month and Year of the update (e.g. "January 2024", "March 2023") — this is mandatory for every single bullet point.
+  1. MUST include the exact Month and Year — mandatory for every bullet.
   2. Order bullets from LATEST to OLDEST (most recent first).
-  3. Format each bullet as: "[Month YYYY] — [what changed/was updated]"
-     Examples:
-       "• [February 2024] — NIST CSF 2.0 officially released, replacing version 1.1."
-       "• [October 2023] — NIS2 Directive came into force across EU member states."
-       "• [July 2023] — SEC adopted new cybersecurity disclosure rules for public companies."
-  4. If no updates occurred within ${dateScope}, write exactly: "No significant changes recorded in ${dateScope}."
-  NEVER write a bullet without a Month and Year. NEVER write just "Recently updated" or "Updated in 2024" without the month.
-- upcoming: changes announced/expected AFTER ${endYear}
+  3. Format each bullet EXACTLY as:
+     "Month YYYY: detailed description of what changed"
+     IMPORTANT FORMAT RULES:
+     - Use a COLON (:) after the date.
+     - DO NOT use hyphens (-) or dashes (—) after the date.
+     - DO NOT use square brackets around the date.
+     - Structure the description naturally and professionally.
+     - Be DETAILED and SPECIFIC: include exact document names, versions,
+       what changed, what was added/removed, and why it matters.
+
+  4. Separate each bullet using the pipe character | at the start (including the first).
+  5. If no updates occurred within ${dateScope}, write exactly:
+     "No significant changes recorded in ${dateScope}."
+
+  ✅ GOOD examples (follow exactly):
+  "| February 2024: NIST officially released Cybersecurity Framework (CSF) 2.0, replacing version 1.1, introducing the new Govern function, and expanding enterprise-wide cyber risk management expectations across sectors."
+  "| October 2023: NIST issued SP 800-53 Release 5.1.1, adding new supply chain and privacy controls and integrating updates into the Cybersecurity and Privacy Reference Tool (CPRT)."
+  "| July 2023: SEC adopted mandatory cybersecurity disclosure rules requiring public companies to report material cyber incidents within four business days and disclose annual risk management practices."
+
+  ❌ BAD (DO NOT USE):
+  - "February 2024 – update released"
+  - "[February 2024] — changes announced"
+  - "2024: update"
+
+- upcoming: changes announced or expected AFTER ${endYear}
 - implications: compliance implications from changes in ${dateScope}
 - sourceNote: one sentence confirming data is scoped to ${dateScope} and whether source is live search or training knowledge
+
 STRICT RULES:
 1. Only include events within ${dateScope} (${years.join(", ")}).
 2. Do NOT include anything before ${startYear} or after ${endYear}.
-Return ONLY valid JSON. No markdown fences. No extra text.`;
+3. Follow the exact bullet format rules above — colon is mandatory.
+
+Return ONLY valid JSON.
+No markdown fences.
+No extra text.`;
+``
 
       const usr =
 `Framework: ${f.name}

@@ -63,6 +63,13 @@ export async function exportCSV(frameworks, results, newFWs, timeRange) {
     size: 12,
   };
 
+  const headerBorder = {
+    top:    { style: "thin", color: { argb: "FFFFFFFF" } },
+    bottom: { style: "thin", color: { argb: "FFFFFFFF" } },
+    left:   { style: "thin", color: { argb: "FFFFFFFF" } },
+    right:  { style: "thin", color: { argb: "FFFFFFFF" } },
+  };
+
   const headerAlignment = {
     horizontal: "center",
     vertical: "middle",
@@ -101,6 +108,7 @@ export async function exportCSV(frameworks, results, newFWs, timeRange) {
     cell.alignment = headerAlignment;
     // First 3 columns: dark purple, rest: black
     cell.fill = colNumber <= 3 ? purpleFill : blackFill;
+    cell.border = headerBorder;
   });
 
   // ── Data rows ─────────────────────────────────────────────────────────

@@ -24,35 +24,70 @@ export const timeRangeLabel = (r) => {
 function getYearRange(timeRange) {
   const spans = { "3m": 0, "6m": 0, "1y": 1, "2y": 2, "3y": 3, "5y": 5 };
   const span  = spans[timeRange] ?? 1;
-  if (span === 0) {
-    const y = CURRENT_YEAR;
-    return { startYear: y, endYear: y, years: [y],
-      preGPTYears: y <= GPT_KNOWLEDGE_CUTOFF ? [y] : [],
-      liveYears:   y >= 2024 ? [y] : [] };
+
+  const now          = new Date();
+  const currentMonth = now.getMonth();     // 0-based (April = 3)
+  const currentYear  = now.getFullYear();  // 2026
+
+  const MONTHS = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December",
+  ];
+
+  // ── Sub-year: 3m / 6m — compute actual month range ───────────────────
+  if (timeRange === "3m" || timeRange === "6m") {
+    const monthsBack = timeRange === "3m" ? 3 : 6;
+    const startDate  = new Date(currentYear, currentMonth - monthsBack, 1);
+    const startYr    = startDate.getFullYear();
+    const startMo    = startDate.getMonth();
+
+    const years = [];
+    for (let y = startYr; y <= currentYear; y++) years.push(y);
+
+    return {
+      startYear:    startYr,
+      endYear:      currentYear,
+      years,
+      startMonthName: MONTHS[startMo],
+      endMonthName:   MONTHS[currentMonth],
+      isSubYear:      true,
+      preGPTYears: years.filter(y => y <= GPT_KNOWLEDGE_CUTOFF),
+      liveYears:   years.filter(y => y >= 2024),
+    };
   }
+
+  // ── 1 year ────────────────────────────────────────────────────────────
   if (span === 1) {
-    // 1y = previous full year only (e.g. 2025)
-    const y = CURRENT_YEAR - 1;
-    return { startYear: y, endYear: y, years: [y],
+    const y = currentYear - 1;
+    return {
+      startYear: y, endYear: y, years: [y],
+      isSubYear: false,
       preGPTYears: y <= GPT_KNOWLEDGE_CUTOFF ? [y] : [],
-      liveYears:   y >= 2024 ? [y] : [] };
+      liveYears:   y >= 2024 ? [y] : [],
+    };
   }
-  // 2y/3y/5y → up to CURRENT_YEAR (2026) inclusive
-  const startYear = CURRENT_YEAR - span;
-  const endYear   = CURRENT_YEAR;        // ← FIXED
+
+  // ── 2y, 3y, 5y ───────────────────────────────────────────────────────
+  const startYear = currentYear - span;
+  const endYear   = currentYear;
   const years     = [];
   for (let y = startYear; y <= endYear; y++) years.push(y);
+
   return {
     startYear, endYear, years,
+    isSubYear: false,
     preGPTYears: years.filter(y => y <= GPT_KNOWLEDGE_CUTOFF),
     liveYears:   years.filter(y => y >= 2024),
   };
 }
 
-function buildDateScope(startYear, endYear) {
-  return startYear === endYear
-    ? `the year ${startYear}`
-    : `the years ${startYear} to ${endYear}`;
+function buildDateScope(range) {
+  if (range.isSubYear) {
+    return `${range.startMonthName} ${range.startYear} to ${range.endMonthName} ${range.endYear}`;
+  }
+  return range.startYear === range.endYear
+    ? `the year ${range.startYear}`
+    : `the years ${range.startYear} to ${range.endYear}`;
 }
 
 function normName(name) {
@@ -227,8 +262,9 @@ export function useCyberScan() {
     } = stateRef.current;
 
     const f                             = frameworksList[i];
-    const { startYear, endYear, years } = getYearRange(timeRange);
-    const dateScope                     = buildDateScope(startYear, endYear);
+    const range     = getYearRange(timeRange);
+    const { startYear, endYear, years } = range;
+    const dateScope = buildDateScope(range);
 
     // Create a fresh AbortController for this framework's GPT call
     const controller = new AbortController();
@@ -261,8 +297,12 @@ export function useCyberScan() {
         if (page) ctx = `Live page content from ${f.url}:\n${page}`;
       }
 
+      const currentMonth = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+
       const sys =
 `You are a cybersecurity and privacy compliance expert.
+Today's date is ${currentMonth}. Do NOT include any events after this date.
+Any event in a future month (after ${currentMonth}) is speculation and MUST be excluded.
 Return a JSON object with EXACTLY these keys:
 
 - currentVersion: current version/status as of end of ${endYear}
@@ -301,8 +341,10 @@ Return a JSON object with EXACTLY these keys:
 
 STRICT RULES:
 1. Only include events within ${dateScope} (${years.join(", ")}).
-2. Do NOT include anything before ${startYear} or after ${endYear}.
-3. Follow the exact bullet format rules above — colon is mandatory.
+2. Do NOT include anything before ${startYear}.
+3. Do NOT include anything AFTER ${currentMonth} — future months in ${endYear} have NOT happened yet.
+4. Follow the exact bullet format rules above — colon is mandatory.
+5. If the time range includes the current year (${CURRENT_YEAR}), only include events up to and including ${currentMonth}.
 
 Return ONLY valid JSON.
 No markdown fences.
@@ -376,8 +418,9 @@ Return JSON strictly scoped to ${dateScope}.`;
     //setNewFWs([]);
     setDiscoverError(null);
 
-    const { startYear, endYear, years, preGPTYears, liveYears } = getYearRange(timeRange);
-    const dateScope    = buildDateScope(startYear, endYear);
+    const range = getYearRange(timeRange);
+    const { startYear, endYear, years, preGPTYears, liveYears } = range;
+    const dateScope = buildDateScope(range);
     const fullYearList = years.join(", ");
     const creds        = { endpoint: azureEndpoint, apiKey: azureKey, deployment, apiVersion };
 

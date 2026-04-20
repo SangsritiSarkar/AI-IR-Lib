@@ -48,7 +48,7 @@ export async function exportCSV(frameworks, results, newFWs, timeRange) {
   const purpleFill = {
     type: "pattern",
     pattern: "solid",
-    fgColor: { argb: "FF2D1B69" },
+    fgColor: { argb: "FF4F2D7F" },
   };
 
   const blackFill = {

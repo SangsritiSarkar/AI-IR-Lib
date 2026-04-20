@@ -90,7 +90,7 @@ export async function exportCSV(frameworks, results, newFWs, timeRange) {
 
   // Column definitions
   ws.columns = [
-    { header: "Framework Name",        key: "name",       width: 35 },
+    { header: "Authoritative Sources",        key: "name",       width: 35 },
     { header: "URL",                   key: "url",        width: 40 },
     { header: "Last known Version",    key: "version",    width: 20 },
     { header: "Current Version",       key: "current",    width: 50 },

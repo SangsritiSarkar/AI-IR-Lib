@@ -65,7 +65,7 @@ export default function CyberScan() {
           discoverStatus={scan.discoverStatus} discoverError={scan.discoverError}
           onScan={scan.startScan}              onAbortScan={scan.abortScan}
           onDiscover={scan.startDiscover}      onAbortDiscover={scan.abortDiscover}
-          onExport={() => exportCSV(scan.frameworks, scan.results, scan.newFWs, scan.timeRange)}
+          onExport={async () => await exportCSV(scan.frameworks, scan.results, scan.newFWs, scan.timeRange)}
         />
 
         {/* Two-column: framework list (left) + detail panel (right) */}

@@ -298,82 +298,128 @@ export function useCyberScan() {
       }
 
       const currentMonth = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+      const hasLiveData = ctx.startsWith("Live search");
 
       const sys =
 `You are a cybersecurity and privacy compliance expert.
-Today's date is ${currentMonth}. Do NOT include any events after this date.
-Any event in a future month (after ${currentMonth}) is speculation and MUST be excluded.
+Today's date is ${currentMonth}. Any month after this has NOT happened yet.
+
 Return a JSON object with EXACTLY these keys:
 
-- currentVersion: current version/status as of end of ${endYear}
+- currentVersion: A sentence stating the current version as of end of ${endYear}.
+  Include the exact version number or edition identifier.
+  Last known version from our records: "${f.version || "unknown"}". Confirm or update.
+  If the framework name refers to an organization (e.g. NIST, ISO, ENISA), identify
+  the PRIMARY flagship framework and state its current version.
+  Examples:
+    "NIST CSF 2.0 is the current version, released February 2024."
+    "ISO/IEC 27001:2022 is the current edition."
+  NEVER write vague text like "standards have been updated" without a specific version.
 
 - recentChanges: bullet list of updates ONLY within ${dateScope}.
-  STRICT REQUIREMENTS for each bullet:
-  1. MUST include the exact Month and Year — mandatory for every bullet.
-  2. Order bullets from LATEST to OLDEST (most recent first).
-  3. Format each bullet EXACTLY as:
-     "Month YYYY: detailed description of what changed"
-     IMPORTANT FORMAT RULES:
-     - Use a COLON (:) after the date.
-     - DO NOT use hyphens (-) or dashes (—) after the date.
-     - DO NOT use square brackets around the date.
-     - Structure the description naturally and professionally.
-     - Be DETAILED and SPECIFIC: include exact document names, versions,
-       what changed, what was added/removed, and why it matters.
 
-  4. Separate each bullet using the pipe character | at the start (including the first).
-  5. If no updates occurred within ${dateScope}, write exactly:
-     "No significant changes recorded in ${dateScope}."
+  DATE ACCURACY RULES:
+  1. For events in 2024 or earlier: Your training knowledge is reliable.
+     You may mention dates naturally within the sentence when you are confident.
+  2. For events in 2025 or later: ONLY mention a date if it is explicitly
+     stated in the live search results provided below.
+     If the live search results do not contain a specific date for an event,
+     describe the change WITHOUT any date.
+  3. NEVER guess, invent, or fabricate a month or year.
+  4. NEVER use a forced format like "Month YYYY:" at the start of a bullet.
+     Instead, weave the date naturally into the sentence when available.
 
-  ✅ GOOD examples (follow exactly):
-  "| February 2024: NIST officially released Cybersecurity Framework (CSF) 2.0, replacing version 1.1, introducing the new Govern function, and expanding enterprise-wide cyber risk management expectations across sectors."
-  "| October 2023: NIST issued SP 800-53 Release 5.1.1, adding new supply chain and privacy controls and integrating updates into the Cybersecurity and Privacy Reference Tool (CPRT)."
-  "| July 2023: SEC adopted mandatory cybersecurity disclosure rules requiring public companies to report material cyber incidents within four business days and disclose annual risk management practices."
+  SCOPE RULES:
+  5. EVERY change you mention MUST genuinely fall within ${dateScope}.
+     Do NOT include anything outside this range — not even by one month.
+  6. Do NOT include any event after ${currentMonth} — those months have not happened.
+  7. If you are unsure whether a change occurred within ${dateScope}, do NOT include it.
+     It is far better to list fewer verified changes than to include uncertain ones.
 
-  ❌ BAD (DO NOT USE):
-  - "February 2024 – update released"
-  - "[February 2024] — changes announced"
-  - "2024: update"
+  CONTENT RULES:
+  8. Be DETAILED and SPECIFIC: mention exact document names, version numbers,
+     what changed, what was added or removed, why it matters, and who it affects.
+  9. Do NOT write vague summaries. Always explain WHAT changed and WHY it is significant.
+
+  FORMATTING:
+  10. Separate each bullet using the pipe character | at the start (including the first).
+  11. If no updates occurred within ${dateScope}, write exactly:
+      "No significant changes recorded in ${dateScope}."
+
+  GOOD EXAMPLES:
+  "| NIST officially released Cybersecurity Framework (CSF) 2.0 in February 2024, replacing version 1.1, introducing the new Govern function, and expanding enterprise-wide cyber risk management expectations across sectors."
+  "| PCI SSC released additional guidance on script integrity monitoring for payment pages, mandating weekly validation checks under requirements 6.4.3 and 11.6.1."
+  "| The SEC adopted mandatory cybersecurity disclosure rules in July 2023, requiring public companies to report material incidents within four business days."
+
+  BAD EXAMPLES (DO NOT DO THIS):
+  - "February 2024: NIST released..." ← forced date prefix
+  - "March 2026: PCI DSS updated..." ← date not from live search, invented
+  - "An update was released." ← too vague
 
 - upcoming: changes announced or expected AFTER ${endYear}
 - implications: compliance implications from changes in ${dateScope}
 - sourceNote: one sentence confirming data is scoped to ${dateScope} and whether source is live search or training knowledge
 
 STRICT RULES:
-1. Only include events within ${dateScope} (${years.join(", ")}).
+1. Only include events that occurred within ${dateScope} (${years.join(", ")}).
 2. Do NOT include anything before ${startYear}.
-3. Do NOT include anything AFTER ${currentMonth} — future months in ${endYear} have NOT happened yet.
-4. Follow the exact bullet format rules above — colon is mandatory.
-5. If the time range includes the current year (${CURRENT_YEAR}), only include events up to and including ${currentMonth}.
+3. Do NOT include anything after ${currentMonth}.
+4. Never include changes from months that have not happened yet.
+5. For 2025 and later: only include specific dates if they appear in the live search data provided.
+6. For 2024 and earlier: your training knowledge is trustworthy for dates.
 
-Return ONLY valid JSON.
-No markdown fences.
-No extra text.`;
-``
+Return ONLY valid JSON. No markdown fences. No extra text.`;
 
       const usr =
 `Framework: ${f.name}
 Last known version: ${f.version ?? "unknown"}
 Category: ${f.category ?? "cybersecurity/privacy"}
 STRICT time scope: ${dateScope} (${years.join(", ")})
+Today's date: ${currentMonth}
+
+DATA SOURCE: ${hasLiveData
+  ? "LIVE WEB SEARCH — the search results below are your primary source. Only report dates for 2025+ events if explicitly found in these results. For 2024 and earlier, use your training knowledge."
+  : "TRAINING KNOWLEDGE ONLY — no live search data is available. For 2024 and earlier, include dates naturally. For 2025 and later, describe changes WITHOUT dates since you cannot verify exact timing."}
 
 ${ctx}
 
-Return JSON strictly scoped to ${dateScope}.`;
+Return JSON strictly scoped to ${dateScope}.
+Do NOT include any event outside ${dateScope} or after ${currentMonth}.
+${hasLiveData
+  ? "For 2025+ events: only include dates explicitly found in the search results above."
+  : "For 2025+ events: describe changes without dates — do not guess timing."}`;
+
 
       // Pass abort signal — fetch throws AbortError immediately if cancelled
-      const raw   = await callGPT(creds, sys, usr, 900, controller.signal);
+      const raw   = await callGPT(creds, sys, usr, 4096, controller.signal);
       const clean = raw.replace(/```json|```/g, "").trim();
       let parsed;
-      try   { parsed = JSON.parse(clean); }
+      try { parsed = JSON.parse(clean); }
       catch {
-        parsed = {
-          currentVersion: "—",
-          recentChanges:  raw.substring(0, 600),
-          upcoming:       "—",
-          implications:   "—",
-          sourceNote:     `Raw response — JSON parse failed. Scoped to ${dateScope}.`,
-        };
+        // ── Retry with a simpler, shorter prompt ─────────────────────────
+        console.log(`[Scan] JSON parse failed for ${f.name} — retrying with shorter prompt...`);
+        try {
+          const retrySys = `You are a cybersecurity compliance expert.
+      Return a JSON object with these keys: currentVersion, recentChanges, upcoming, implications, sourceNote.
+      Keep each value concise (under 300 characters). Scope: ${dateScope}.
+      Return ONLY valid JSON. No markdown.`;
+
+          const retryUsr = `Framework: ${f.name}. Time scope: ${dateScope}. Give a brief JSON summary.`;
+
+          const retryRaw   = await callGPT(creds, retrySys, retryUsr, 1500, controller.signal);
+          const retryClean = retryRaw.replace(/```json|```/g, "").trim();
+          parsed = JSON.parse(retryClean);
+          console.log(`[Scan] Retry succeeded for ${f.name}`);
+        } catch {
+          // Both attempts failed — use fallback
+          parsed = {
+            currentVersion: "—",
+            recentChanges:  raw.substring(0, 600),
+            upcoming:       "—",
+            implications:   "—",
+            sourceNote:     `Raw response — JSON parse failed. Scoped to ${dateScope}.`,
+          };
+        }
       }
       // ── Normalise recentChanges — if GPT returned array, join to pipe-string ──
       if (Array.isArray(parsed?.recentChanges)) {

@@ -2,7 +2,7 @@ export async function callGPT(
   { endpoint, apiKey, deployment, apiVersion },
   system,
   user,
-  maxTokens = 900,
+  maxTokens = 4096,
   signal = null        // ← AbortSignal from AbortController
 ) {
   const url =

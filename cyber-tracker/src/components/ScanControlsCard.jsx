@@ -28,7 +28,7 @@ export default function ScanControlsCard({
         Scan Controls
       </div>
       <p style={{ fontSize: 12, color: C.textMuted, marginBottom: 16, marginTop: -8 }}>
-        Fetch live updates for existing frameworks &middot; Discover brand-new regulations separately
+        Fetch live updates for existing frameworks or regulations &middot; Discover brand-new regulations separately
       </p>
 
       {/* Time Range */}
@@ -95,7 +95,7 @@ export default function ScanControlsCard({
           📋 Scan Existing Frameworks
         </div>
         <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
-          Fetch updates &amp; changes for frameworks in your uploaded file, scoped
+          Fetch updates &amp; changes for frameworks or regulations in your uploaded file, scoped
           to <strong style={{ color: C.text }}>{timeRangeLabel(timeRange)}</strong>.
         </div>
 
@@ -306,7 +306,7 @@ export default function ScanControlsCard({
             background: C.warningBg, border: `1px solid ${C.warningBorder}`,
             color: C.warning, fontSize: 12,
           }}>
-            No new frameworks found for <strong>{timeRangeLabel(timeRange)}</strong>. Try a wider time range.
+            No new frameworks or regulations found for <strong>{timeRangeLabel(timeRange)}</strong>. Try a wider time range.
           </div>
         )}
 
